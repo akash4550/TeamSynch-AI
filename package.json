@@ -1,5 +1,5 @@
 {
-  "name": "aiworkspace-root",
+  "name": "teamsynch-ai-root",
   "private": true,
   "workspaces": [
     "apps/*"
@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
     "generate": "npm run generate --workspace=api",
+    "db:push": "npm run db:push --workspace=api",
+    "seed": "npm run seed --workspace=api",
     "typecheck": "npm run typecheck --workspace=api && npm run typecheck --workspace=web",
     "build": "npm run build:api && npm run build:web",
     "build:api": "npm run generate --workspace=api && npm run build --workspace=api",
@@ -16,6 +18,8 @@
     "smoke:prepare-auth": "node scripts/prepare-production-auth-smoke.mjs",
     "smoke:production": "node scripts/smoke-production.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "clean": "bash scripts/clean-repo.sh",
+    "rename": "bash scripts/rename-project.sh",
     "api": "npm run dev --workspace=api",
     "web": "npm run dev --workspace=web",
     "infra:start": "docker compose up -d",
@@ -44,6 +48,8 @@
     }
   },
   "devDependencies": {
-    "prettier": "^3.0.0"
+    "prettier": "^3.0.0",
+    "prisma": "^5.22.0",
+    "typescript": "^5.9.3"
   }
 }
