@@ -81,8 +81,6 @@ export class AuthService {
       throw new AppError(INVALID_CREDENTIALS_MESSAGE, 401);
     }
 
-    await this.repository.recordSuccessfulLogin(user.id);
-
     const identity = {
       userId: user.id,
       organizationId: user.organizationId,
@@ -91,7 +89,8 @@ export class AuthService {
     const refreshToken = signRefreshToken(identity);
     const refreshClaims = verifyRefreshToken(refreshToken);
 
-    await this.repository.createRefreshToken({
+    // Atomic login session update wrapping user update & refresh token creation
+    await this.repository.recordLoginSession(user.id, {
       tokenHash: this.hashToken(refreshToken),
       userId: user.id,
       expiresAt: new Date(refreshClaims.exp * 1000),

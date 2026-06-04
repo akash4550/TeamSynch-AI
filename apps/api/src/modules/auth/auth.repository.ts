@@ -40,7 +40,7 @@ interface RefreshTokenMetadata {
   userAgent?: string;
 }
 
-interface CreateRefreshTokenInput extends RefreshTokenMetadata {
+export interface CreateRefreshTokenInput extends RefreshTokenMetadata {
   tokenHash: string;
   userId: string;
   expiresAt: Date;
@@ -120,6 +120,34 @@ export class AuthRepository {
         ipAddress: input.ipAddress,
         userAgent: input.userAgent,
       },
+    });
+  }
+
+  /**
+   * Atomic Login Session Update wrapping user login record & refresh token creation in prisma.$transaction
+   */
+  async recordLoginSession(userId: string, input: CreateRefreshTokenInput): Promise<void> {
+    await this.db.$transaction(async (transaction) => {
+      await transaction.user.update({
+        where: { id: userId },
+        data: {
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+          lastLogin: new Date(),
+        },
+      });
+
+      await transaction.refreshToken.create({
+        data: {
+          tokenHash: input.tokenHash,
+          userId: input.userId,
+          expiresAt: input.expiresAt,
+          lastUsedAt: new Date(),
+          device: input.device,
+          ipAddress: input.ipAddress,
+          userAgent: input.userAgent,
+        },
+      });
     });
   }
 
