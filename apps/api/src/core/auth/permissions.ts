@@ -30,6 +30,7 @@ export const PERMISSIONS = {
   CRM: {
     READ: 'crm:read',
     WRITE: 'crm:write',
+    MANAGE_PIPELINE: 'crm:manage_pipeline',
   },
 
   DOCUMENT: {
@@ -37,6 +38,14 @@ export const PERMISSIONS = {
     CREATE: 'document:create',
     UPDATE: 'document:update',
     DELETE: 'document:delete',
+  },
+
+  ANALYTICS: {
+    VIEW: 'analytics:view',
+  },
+
+  BILLING: {
+    MANAGE: 'billing:manage',
   },
 
   AI: {
@@ -53,7 +62,9 @@ export type Permission =
   | 'project:read' | 'project:create' | 'project:update' | 'project:delete'
   | 'task:read' | 'task:create' | 'task:update' | 'task:delete' | 'task:assign' | 'task:archive'
   | 'team:read' | 'team:manage'
-  | 'crm:read' | 'crm:write'
+  | 'crm:read' | 'crm:write' | 'crm:manage_pipeline'
   | 'document:read' | 'document:create' | 'document:update' | 'document:delete'
+  | 'analytics:view'
+  | 'billing:manage'
   | 'ai:use'
   | 'system:admin';

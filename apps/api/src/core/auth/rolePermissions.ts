@@ -15,7 +15,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     ...Object.values(PERMISSIONS.TEAM),
     ...Object.values(PERMISSIONS.CRM),
     ...Object.values(PERMISSIONS.DOCUMENT),
-
+    PERMISSIONS.ANALYTICS.VIEW,
+    PERMISSIONS.BILLING.MANAGE,
     PERMISSIONS.AI.USE,
   ],
 
@@ -31,6 +32,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
 
     PERMISSIONS.CRM.READ,
     PERMISSIONS.CRM.WRITE,
+    PERMISSIONS.CRM.MANAGE_PIPELINE,
 
     PERMISSIONS.TEAM.READ,
 
@@ -38,6 +40,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.DOCUMENT.CREATE,
     PERMISSIONS.DOCUMENT.UPDATE,
 
+    PERMISSIONS.ANALYTICS.VIEW,
     PERMISSIONS.AI.USE,
   ],
 
@@ -51,6 +54,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.CRM.READ,
 
     PERMISSIONS.DOCUMENT.READ,
+    PERMISSIONS.DOCUMENT.CREATE,
 
     PERMISSIONS.AI.USE,
   ],
