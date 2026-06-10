@@ -45,7 +45,7 @@ export const logger = winston.createLogger({
     json(),
   ),
   defaultMeta: {
-    service: 'aiworkspace-api',
+    service: 'teamsynch-ai-api',
   },
   transports: [
     new winston.transports.Console({
