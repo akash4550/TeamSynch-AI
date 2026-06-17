@@ -1,6 +1,7 @@
 import { Prisma, TaskStatus } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../core/errors/AppError';
+import { executeCursorQuery, CursorPaginatedResult } from '../../core/database/cursorPagination';
 import {
   CreateTaskDto,
   UpdateTaskDto,
@@ -120,6 +121,50 @@ export class TaskRepository {
         },
       },
     });
+  }
+
+  /**
+   * Scalable Cursor-Based Pagination for multi-tenant tasks using compound index [organizationId, createdAt(desc), deletedAt]
+   */
+  async findManyWithCursor(
+    organizationId: string,
+    options: {
+      cursor?: string;
+      limit?: number;
+      projectId?: string;
+      status?: TaskStatus;
+      assigneeId?: string;
+    }
+  ): Promise<CursorPaginatedResult<any>> {
+    const where: Prisma.TaskWhereInput = {
+      organizationId,
+      deletedAt: null,
+      archived: false,
+    };
+
+    if (options.projectId) where.projectId = options.projectId;
+    if (options.status) where.status = options.status;
+    if (options.assigneeId) where.assigneeId = options.assigneeId;
+
+    return executeCursorQuery(
+      prisma.task,
+      {
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          assignee: {
+            select: { id: true, firstName: true, lastName: true, avatar: true },
+          },
+          project: {
+            select: { id: true, name: true, key: true },
+          },
+        },
+      },
+      {
+        cursor: options.cursor,
+        limit: options.limit,
+      }
+    );
   }
 
   async findMany(
