@@ -1,6 +1,6 @@
 import { TaskStatus } from '@prisma/client';
-
 import { AppError } from '../../core/errors/AppError';
+import { eventBus } from '../../core/events/EventBus';
 import { TaskRepository } from './task.repository';
 import {
   CreateTaskDto,
@@ -37,11 +37,16 @@ export class TaskService {
       data
     );
 
-    // TODO:
-    // EventBus.publish('task.created', task);
-    // Socket.emitToOrg(...)
-    // ActivityLog.create(...)
-    // Notification.create(...)
+    // Emit strongly typed domain event
+    eventBus.emitEvent('TaskCreated', {
+      organizationId,
+      taskId: task.id,
+      actorId: reporterId,
+      title: task.title,
+      projectId: task.projectId,
+      assigneeId: task.assigneeId,
+      status: task.status,
+    });
 
     return task;
   }
@@ -49,7 +54,8 @@ export class TaskService {
   async updateTask(
     organizationId: string,
     taskId: string,
-    data: UpdateTaskDto
+    data: UpdateTaskDto,
+    actorId?: string
   ) {
     const updateData: UpdateTaskDto = {
       ...data,
@@ -70,8 +76,13 @@ export class TaskService {
       throw new AppError('Task not found', 404);
     }
 
-    // TODO:
-    // EventBus.publish('task.updated', task);
+    // Emit strongly typed domain event
+    eventBus.emitEvent('TaskUpdated', {
+      organizationId,
+      taskId: task.id,
+      actorId: actorId || task.reporterId,
+      changes: updateData,
+    });
 
     return task;
   }
@@ -79,7 +90,8 @@ export class TaskService {
   async moveTask(
     organizationId: string,
     taskId: string,
-    data: MoveTaskDto
+    data: MoveTaskDto,
+    actorId?: string
   ) {
     const task = await this.repository.update(
       organizationId,
@@ -96,8 +108,14 @@ export class TaskService {
       throw new AppError('Task not found', 404);
     }
 
-    // TODO:
-    // EventBus.publish('task.moved', task);
+    // Emit strongly typed domain event
+    eventBus.emitEvent('TaskStatusMoved', {
+      organizationId,
+      taskId: task.id,
+      actorId: actorId || task.reporterId,
+      status: data.status,
+      position: data.position,
+    });
 
     return task;
   }
@@ -105,7 +123,8 @@ export class TaskService {
   async assignTask(
     organizationId: string,
     taskId: string,
-    assigneeId: string | null
+    assigneeId: string | null,
+    actorId?: string
   ) {
     const task = await this.repository.update(
       organizationId,
@@ -119,8 +138,14 @@ export class TaskService {
       throw new AppError('Task not found', 404);
     }
 
-    // TODO:
-    // NotificationService.notifyAssignee(task);
+    // Emit strongly typed domain event
+    eventBus.emitEvent('TaskAssigned', {
+      organizationId,
+      taskId: task.id,
+      taskTitle: task.title,
+      assigneeId,
+      actorId: actorId || task.reporterId,
+    });
 
     return task;
   }
@@ -157,7 +182,11 @@ export class TaskService {
     return task;
   }
 
-  async deleteTask(organizationId: string, taskId: string) {
+  async deleteTask(
+    organizationId: string,
+    taskId: string,
+    actorId?: string
+  ) {
     const result = await this.repository.softDelete(
       organizationId,
       taskId
@@ -167,8 +196,12 @@ export class TaskService {
       throw new AppError('Task not found', 404);
     }
 
-    // TODO:
-    // EventBus.publish('task.deleted', { taskId });
+    // Emit strongly typed domain event
+    eventBus.emitEvent('TaskSoftDeleted', {
+      organizationId,
+      taskId,
+      actorId: actorId || 'system',
+    });
 
     return result;
   }

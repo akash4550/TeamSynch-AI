@@ -4,7 +4,9 @@ import { EventEmitter } from 'events';
 export type DomainEvent =
   | 'TaskCreated'
   | 'TaskUpdated'
+  | 'TaskStatusMoved'
   | 'TaskAssigned'
+  | 'TaskSoftDeleted'
   | 'ProjectCreated'
   | 'ProjectUpdated'
   | 'TeamMemberInvited'
@@ -22,6 +24,7 @@ export type DomainEvent =
   | 'OpportunityCreated'
   | 'OpportunityUpdated'
   | 'OpportunityDeleted'
+  | 'OpportunityStageMoved'
   | 'PipelineStageCreated'
   | 'PipelineStageUpdated'
   | 'PipelineStageDeleted'
@@ -36,13 +39,10 @@ export interface EventPayload {
 class EventBus extends EventEmitter {
   constructor() {
     super();
-    // Increase max listeners to prevent memory leak warnings as the app grows
     this.setMaxListeners(50);
   }
 
   emitEvent(eventName: DomainEvent, payload: EventPayload) {
-    // In a real microservices architecture, this could publish to Kafka or Redis Pub/Sub
-    // For our modular monolith, an in-memory emitter is sufficient and fast
     this.emit(eventName, payload);
     return true;
   }
@@ -52,5 +52,4 @@ class EventBus extends EventEmitter {
   }
 }
 
-// Export singleton instance
 export const eventBus = new EventBus();
