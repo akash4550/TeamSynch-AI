@@ -2,35 +2,36 @@ import { useMemo } from 'react';
 import { Card, Title, Text, Metric, Grid, Flex, Icon, Button } from '@tremor/react';
 import { Link } from 'react-router-dom';
 import { UsersIcon, BriefcaseIcon, CurrencyDollarIcon, PresentationChartLineIcon } from '@heroicons/react/24/outline';
-import { useClients, useOpportunities, useActivities } from './hooks/useCRMQueries';
+import { useClients, useOpportunities, useActivities, type Opportunity } from './hooks/useCRMQueries';
 
 export const CRMDashboard = () => {
-  const { data: clients, isLoading: isLoadingClients } = useClients();
-  const { data: opportunities, isLoading: isLoadingOpps } = useOpportunities();
-  const { data: activities, isLoading: isLoadingActivities } = useActivities();
+  const { data: clientsData, isLoading: isLoadingClients } = useClients();
+  const { data: oppsData, isLoading: isLoadingOpps } = useOpportunities();
+  const { data: activitiesData, isLoading: isLoadingActivities } = useActivities();
 
-  const totalClients = clients?.length || 0;
+  const clients = clientsData?.data || [];
+  const opportunities = oppsData?.data || [];
+  const activities = activitiesData || [];
+
+  const totalClients = clients.length;
 
   const activeOpportunities = useMemo(() => {
-    return opportunities?.filter((opp) => opp.status === 'OPEN').length || 0;
+    return opportunities.length;
   }, [opportunities]);
 
   const pipelineValue = useMemo(() => {
-    return opportunities?.filter((opp) => opp.status === 'OPEN').reduce((sum, opp) => sum + (opp.value || 0), 0) || 0;
+    return opportunities.reduce((sum: number, opp: Opportunity) => sum + Number(opp.expectedRevenue || 0), 0);
   }, [opportunities]);
 
   const conversionRate = useMemo(() => {
-    if (!opportunities || opportunities.length === 0) return 0;
-    const won = opportunities.filter((opp) => opp.status === 'WON').length;
-    return Math.round((won / opportunities.length) * 100);
+    if (opportunities.length === 0) return 0;
+    // Calculate average probability across pipeline
+    const totalProb = opportunities.reduce((sum: number, opp: Opportunity) => sum + (opp.probability || 0), 0);
+    return Math.round(totalProb / opportunities.length);
   }, [opportunities]);
 
   const recentActivities = useMemo(() => {
-    return activities?.filter((a) => a.status === 'COMPLETED').slice(0, 5) || [];
-  }, [activities]);
-
-  const upcomingTasks = useMemo(() => {
-    return activities?.filter((a) => a.status === 'PENDING').slice(0, 5) || [];
+    return activities.slice(0, 5);
   }, [activities]);
 
   const formatCurrency = (value: number) => {
@@ -65,7 +66,7 @@ export const CRMDashboard = () => {
         <Card decoration="top" decorationColor="emerald">
           <Flex alignItems="start">
             <div>
-              <Text>Active Opportunities</Text>
+              <Text>Active Deals</Text>
               <Metric>{isLoadingOpps ? '...' : activeOpportunities}</Metric>
             </div>
             <BriefcaseIcon className="h-10 w-10 text-emerald-500 opacity-20" />
@@ -83,7 +84,7 @@ export const CRMDashboard = () => {
         <Card decoration="top" decorationColor="indigo">
           <Flex alignItems="start">
             <div>
-              <Text>Conversion Rate</Text>
+              <Text>Avg. Win Probability</Text>
               <Metric>{isLoadingOpps ? '...' : `${conversionRate}%`}</Metric>
             </div>
             <PresentationChartLineIcon className="h-10 w-10 text-indigo-500 opacity-20" />
@@ -91,38 +92,26 @@ export const CRMDashboard = () => {
         </Card>
       </Grid>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         <Card>
-          <Title>Recent Activities</Title>
+          <Title>Recent Activities & Notes</Title>
           <div className="mt-4 space-y-4">
             {isLoadingActivities ? (
               <Text>Loading...</Text>
             ) : recentActivities.length > 0 ? (
               recentActivities.map(activity => (
                 <div key={activity.id} className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-semibold px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
+                      {activity.type}
+                    </span>
+                    <span className="text-xs text-gray-500">{new Date(activity.createdAt).toLocaleString()}</span>
+                  </div>
                   <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{activity.description}</span>
-                  <span className="text-xs text-gray-500">{new Date(activity.createdAt).toLocaleDateString()}</span>
                 </div>
               ))
             ) : (
               <Text>No recent activities found.</Text>
-            )}
-          </div>
-        </Card>
-        <Card>
-          <Title>Upcoming Tasks</Title>
-          <div className="mt-4 space-y-4">
-            {isLoadingActivities ? (
-              <Text>Loading...</Text>
-            ) : upcomingTasks.length > 0 ? (
-              upcomingTasks.map(task => (
-                <div key={task.id} className="flex flex-col border-b border-gray-100 dark:border-gray-800 pb-2">
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{task.description}</span>
-                  <span className="text-xs text-gray-500">Due: {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A'}</span>
-                </div>
-              ))
-            ) : (
-              <Text>No upcoming tasks found.</Text>
             )}
           </div>
         </Card>
