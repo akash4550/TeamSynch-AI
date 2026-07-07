@@ -1,9 +1,13 @@
 import { IStorageProvider } from './IStorageProvider';
 import { LocalStorageProvider } from './LocalStorageProvider';
+import { S3StorageProvider } from './S3StorageProvider';
 
 export class StorageFactory {
   static getProvider(): IStorageProvider {
-    // In a real app, this might read from config.env to determine if we use S3, Cloudinary, etc.
+    const provider = process.env.STORAGE_PROVIDER || 'local';
+    if (provider.toLowerCase() === 's3') {
+      return new S3StorageProvider();
+    }
     return new LocalStorageProvider();
   }
 }
