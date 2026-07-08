@@ -1,7 +1,6 @@
-import { PrismaClient, Document, Prisma } from '@prisma/client';
+import { Document, Prisma } from '@prisma/client';
+import { prisma } from '../../config/prisma';
 import { DocumentQueryDto } from './document.dto';
-
-const prisma = new PrismaClient();
 
 export class DocumentRepository {
   async create(data: Prisma.DocumentUncheckedCreateInput): Promise<Document> {
@@ -15,6 +14,16 @@ export class DocumentRepository {
       where: {
         id,
         organizationId,
+        deletedAt: null,
+      },
+    });
+  }
+
+  async findByChecksum(organizationId: string, checksum: string): Promise<Document | null> {
+    return prisma.document.findFirst({
+      where: {
+        organizationId,
+        checksum,
         deletedAt: null,
       },
     });
@@ -58,34 +67,33 @@ export class DocumentRepository {
     return { data, total };
   }
 
-  async update(id: string, organizationId: string, data: Prisma.DocumentUncheckedUpdateInput): Promise<Document> {
-    return prisma.document.update({
-      where: { id },
-      data
-    });
-  }
-  
   async updateSafe(id: string, organizationId: string, data: Prisma.DocumentUncheckedUpdateInput): Promise<Document> {
     const existing = await prisma.document.findFirst({
-      where: { id, organizationId }
+      where: { id, organizationId },
     });
     if (!existing) throw new Error('Document not found');
 
     return prisma.document.update({
       where: { id },
-      data
+      data,
     });
   }
 
-  async getVersions(organizationId: string, parentDocumentId: string): Promise<Document[]> {
+  async getVersions(organizationId: string, documentId: string): Promise<Document[]> {
+    // Find base document
+    const targetDoc = await this.findById(organizationId, documentId);
+    if (!targetDoc) return [];
+
+    const rootId = targetDoc.parentDocumentId || targetDoc.id;
+
     return prisma.document.findMany({
       where: {
         organizationId,
         OR: [
-          { id: parentDocumentId },
-          { parentDocumentId }
+          { id: rootId },
+          { parentDocumentId: rootId },
         ],
-        deletedAt: null
+        deletedAt: null,
       },
       orderBy: { version: 'desc' },
       include: {
