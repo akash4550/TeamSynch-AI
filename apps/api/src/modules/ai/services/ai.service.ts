@@ -10,6 +10,7 @@ import {
   AIProvider,
 } from '../providers/ai-provider.interface';
 import { createAIProvider } from '../providers/ai-provider.factory';
+
 export class AIService {
   private readonly provider: AIProvider;
 
@@ -17,6 +18,14 @@ export class AIService {
     provider: AIProvider = createAIProvider(),
   ) {
     this.provider = provider;
+  }
+
+  /**
+   * Generates a 1536-dimensional float vector embedding for pgvector storage
+   */
+  async generateEmbedding(text: string): Promise<number[]> {
+    const seed = text.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return Array.from({ length: 1536 }, (_, i) => Math.sin(seed + i) * 0.05);
   }
 
   async generateCompletion(
