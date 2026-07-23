@@ -11,7 +11,7 @@ interface Message {
 export const AIAssistantPanel: FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hello! I am your AIWorkspace Assistant. How can I help you today?' }
+    { role: 'assistant', content: 'Hello! I am your TeamSynch AI Assistant. How can I help you today?' }
   ]);
 
   const { mutate: askAssistant, isPending } = useAssistant();
