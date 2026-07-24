@@ -3,7 +3,8 @@ import { Role } from '@prisma/client';
 export type SearchModule =
   | 'projects'
   | 'tasks'
-  | 'crm';
+  | 'crm'
+  | 'documents';
 
 export interface SearchQuery {
   organizationId: string;

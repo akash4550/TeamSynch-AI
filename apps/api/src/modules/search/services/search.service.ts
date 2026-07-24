@@ -16,6 +16,7 @@ const MODULE_PERMISSIONS: Record<
   projects: PERMISSIONS.PROJECT.READ,
   tasks: PERMISSIONS.TASK.READ,
   crm: PERMISSIONS.CRM.READ,
+  documents: PERMISSIONS.DOCUMENT.READ,
 };
 
 const ALL_SEARCH_MODULES = Object.keys(
@@ -81,7 +82,7 @@ export class SearchService {
     }
 
     const permissions =
-      ROLE_PERMISSIONS[query.role];
+      ROLE_PERMISSIONS[query.role] || [];
 
     const allowedModules =
       ALL_SEARCH_MODULES.filter((module) =>
