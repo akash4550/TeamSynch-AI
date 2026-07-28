@@ -1,0 +1,66 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '../../../core/api/client';
+
+export interface PlanQuotas {
+  maxUsers: number;
+  maxProjects: number;
+  maxStorageMb: number;
+  maxAiRequestsPerMonth: number;
+}
+
+export interface SubscriptionUsageData {
+  plan: string;
+  subscriptionStatus: string;
+  quotas: PlanQuotas;
+  usage: {
+    users: { current: number; max: number; percentage: number };
+    projects: { current: number; max: number; percentage: number };
+    aiRequests: { current: number; max: number; percentage: number };
+    storageMb: { current: number; max: number; percentage: number };
+  };
+}
+
+export const BILLING_SUBSCRIPTION_QUERY_KEY = ['billing', 'subscription'];
+
+export const useSubscriptionUsage = () => {
+  return useQuery({
+    queryKey: BILLING_SUBSCRIPTION_QUERY_KEY,
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: SubscriptionUsageData }>('/billing/subscription');
+      return data.data;
+    },
+  });
+};
+
+export const useCreateCheckoutSession = () => {
+  return useMutation({
+    mutationFn: async ({ priceId }: { priceId: string }) => {
+      const { data } = await apiClient.post<{ data: { checkoutUrl: string } }>('/billing/checkout', {
+        priceId,
+      });
+      return data.data;
+    },
+    onSuccess: (data) => {
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      }
+    },
+  });
+};
+
+export const useCreatePortalSession = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await apiClient.post<{ data: { portalUrl: string } }>('/billing/portal', {});
+      return data.data;
+    },
+    onSuccess: (data) => {
+      if (data.portalUrl) {
+        window.location.href = data.portalUrl;
+      }
+      queryClient.invalidateQueries({ queryKey: BILLING_SUBSCRIPTION_QUERY_KEY });
+    },
+  });
+};
