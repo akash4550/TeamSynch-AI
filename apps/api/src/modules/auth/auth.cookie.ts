@@ -3,7 +3,7 @@ import { CookieOptions, Request, Response } from 'express';
 import { env } from '../../config/env';
 import { verifyRefreshToken } from '../../core/security/jwt';
 
-export const REFRESH_COOKIE_NAME = 'aiworkspace_refresh';
+export const REFRESH_COOKIE_NAME = 'teamsynch-ai_refresh';
 export const REFRESH_COOKIE_PATH = '/api/v1/auth';
 
 const refreshCookieOptions: CookieOptions = {

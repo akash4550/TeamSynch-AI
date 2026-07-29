@@ -21,26 +21,26 @@ interface HttpRequestMetric {
 export const metricsRegistry = new Registry();
 
 collectDefaultMetrics({
-    register: metricsRegistry,
-    prefix: 'aiworkspace_'
- });
+  register: metricsRegistry,
+  prefix: 'teamsynch_ai_'
+});
 
 export const httpRequestsTotal = new Counter({
-  name: 'aiworkspace_http_requests_total',
+  name: 'teamsynch_ai_http_requests_total',
   help: 'Total number of HTTP requests processed',
   labelNames: HTTP_LABEL_NAMES,
   registers: [metricsRegistry],
 });
 
 export const httpRequestErrorsTotal = new Counter({
-  name: 'aiworkspace_http_request_errors_total',
+  name: 'teamsynch_ai_http_request_errors_total',
   help: 'Total number of HTTP requests resulting in server errors',
   labelNames: HTTP_LABEL_NAMES,
   registers: [metricsRegistry],
 });
 
 export const httpRequestDurationSeconds = new Histogram({
-  name: 'aiworkspace_http_request_duration_seconds',
+  name: 'teamsynch_ai_http_request_duration_seconds',
   help: 'HTTP request duration in seconds',
   labelNames: HTTP_LABEL_NAMES,
   buckets: [

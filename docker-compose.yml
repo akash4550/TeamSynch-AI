@@ -1,12 +1,12 @@
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: aiworkspace-postgres
+    container_name: teamsynch-ai-postgres
 
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-aiworkspace}
+      POSTGRES_DB: ${POSTGRES_DB:-teamsynch-ai}
 
     ports:
       - "5432:5432"
@@ -23,12 +23,12 @@ services:
     restart: unless-stopped
 
     networks:
-      - aiworkspace
+      - teamsynch-ai
 
 
   redis:
     image: redis:7-alpine
-    container_name: aiworkspace-redis
+    container_name: teamsynch-ai-redis
 
     ports:
       - "6379:6379"
@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
 
     networks:
-      - aiworkspace
+      - teamsynch-ai
 
 
 volumes:
@@ -55,5 +55,5 @@ volumes:
   redis_data:
 
 networks:
-  aiworkspace:
+  teamsynch-ai:
     driver: bridge

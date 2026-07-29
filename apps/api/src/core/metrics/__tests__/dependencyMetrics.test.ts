@@ -38,11 +38,11 @@ describe('dependency metrics', () => {
     const metrics = await metricsRegistry.metrics();
 
     expect(metrics).toContain(
-      'aiworkspace_dependency_up{dependency="postgres"} 1',
+      'teamsynch_ai_dependency_up{dependency="postgres"} 1',
     );
 
     expect(metrics).toContain(
-      'aiworkspace_dependency_check_duration_seconds_count{dependency="postgres",result="success"} 1',
+      'teamsynch_ai_dependency_check_duration_seconds_count{dependency="postgres",result="success"} 1',
     );
   });
 
@@ -59,11 +59,11 @@ describe('dependency metrics', () => {
     const metrics = await metricsRegistry.metrics();
 
     expect(metrics).toContain(
-      'aiworkspace_dependency_up{dependency="redis"} 0',
+      'teamsynch_ai_dependency_up{dependency="redis"} 0',
     );
 
     expect(metrics).toContain(
-      'aiworkspace_dependency_check_duration_seconds_count{dependency="redis",result="failure"} 1',
+      'teamsynch_ai_dependency_check_duration_seconds_count{dependency="redis",result="failure"} 1',
     );
   });
 });

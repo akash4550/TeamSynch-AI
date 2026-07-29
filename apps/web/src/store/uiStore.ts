@@ -21,7 +21,7 @@ export const useUiStore = create<UiState>()(
       setTheme: (theme) => set({ theme }),
     }),
     {
-      name: 'aiworkspace-ui-storage', // local storage key
+      name: 'teamsynch-ai-ui-storage', // local storage key
       partialize: (state) => ({ theme: state.theme, isSidebarOpen: state.isSidebarOpen }),
     }
   )

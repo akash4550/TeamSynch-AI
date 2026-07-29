@@ -29,7 +29,7 @@ export const Sidebar = () => {
   return (
     <aside className="w-64 bg-sidebar-light dark:bg-sidebar-dark border-r border-gray-200 dark:border-slate-700 flex flex-col transition-all duration-300">
       <div className="h-16 flex items-center px-6 border-b border-gray-200 dark:border-slate-700">
-        <span className="text-xl font-bold text-primary-600 dark:text-primary-500">AIWorkspace</span>
+        <span className="text-xl font-bold text-primary-600 dark:text-primary-500">TeamSynch AI</span>
       </div>
       
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">

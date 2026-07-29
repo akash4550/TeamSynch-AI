@@ -2,9 +2,6 @@ import { Registry } from 'prom-client';
 
 import {
   HTTP_LABEL_NAMES,
-  httpRequestDurationSeconds,
-  httpRequestErrorsTotal,
-  httpRequestsTotal,
   metricsRegistry,
   recordHttpRequest,
 } from '../httpMetrics';
@@ -19,12 +16,12 @@ describe('HTTP metrics', () => {
   });
 
   it('uses only bounded HTTP labels', () => {
-  expect(HTTP_LABEL_NAMES).toEqual([
-    'method',
-    'route',
-    'status',
-  ]);
-});
+    expect(HTTP_LABEL_NAMES).toEqual([
+      'method',
+      'route',
+      'status',
+    ]);
+  });
 
   it('records a successful request and its duration', async () => {
     recordHttpRequest({
@@ -37,19 +34,19 @@ describe('HTTP metrics', () => {
     const metrics = await metricsRegistry.metrics();
 
     expect(metrics).toContain(
-      'aiworkspace_http_requests_total{method="GET",route="/api/v1/system/live",status="200"} 1',
+      'teamsynch_ai_http_requests_total{method="GET",route="/api/v1/system/live",status="200"} 1',
     );
 
     expect(metrics).toContain(
-      'aiworkspace_http_request_duration_seconds_count{method="GET",route="/api/v1/system/live",status="200"} 1',
+      'teamsynch_ai_http_request_duration_seconds_count{method="GET",route="/api/v1/system/live",status="200"} 1',
     );
 
     expect(metrics).toContain(
-      'aiworkspace_http_request_duration_seconds_sum{method="GET",route="/api/v1/system/live",status="200"} 0.125',
+      'teamsynch_ai_http_request_duration_seconds_sum{method="GET",route="/api/v1/system/live",status="200"} 0.125',
     );
 
     expect(metrics).not.toContain(
-      'aiworkspace_http_request_errors_total{method="GET",route="/api/v1/system/live",status="200"}',
+      'teamsynch_ai_http_request_errors_total{method="GET",route="/api/v1/system/live",status="200"}',
     );
   });
 
@@ -64,15 +61,15 @@ describe('HTTP metrics', () => {
     const metrics = await metricsRegistry.metrics();
 
     expect(metrics).toContain(
-      'aiworkspace_http_requests_total{method="POST",route="/api/v1/tasks",status="500"} 1',
+      'teamsynch_ai_http_requests_total{method="POST",route="/api/v1/tasks",status="500"} 1',
     );
 
     expect(metrics).toContain(
-      'aiworkspace_http_request_errors_total{method="POST",route="/api/v1/tasks",status="500"} 1',
+      'teamsynch_ai_http_request_errors_total{method="POST",route="/api/v1/tasks",status="500"} 1',
     );
 
     expect(metrics).toContain(
-      'aiworkspace_http_request_duration_seconds_count{method="POST",route="/api/v1/tasks",status="500"} 1',
+      'teamsynch_ai_http_request_duration_seconds_count{method="POST",route="/api/v1/tasks",status="500"} 1',
     );
   });
 
@@ -94,15 +91,15 @@ describe('HTTP metrics', () => {
     const metrics = await metricsRegistry.metrics();
 
     expect(metrics).toContain(
-      'aiworkspace_http_requests_total{method="GET",route="/api/v1/users/:id",status="200"} 2',
+      'teamsynch_ai_http_requests_total{method="GET",route="/api/v1/users/:id",status="200"} 2',
     );
 
     expect(metrics).toContain(
-      'aiworkspace_http_request_duration_seconds_count{method="GET",route="/api/v1/users/:id",status="200"} 2',
+      'teamsynch_ai_http_request_duration_seconds_count{method="GET",route="/api/v1/users/:id",status="200"} 2',
     );
 
     expect(metrics).toContain(
-      'aiworkspace_http_request_duration_seconds_sum{method="GET",route="/api/v1/users/:id",status="200"} 0.30000000000000004',
+      'teamsynch_ai_http_request_duration_seconds_sum{method="GET",route="/api/v1/users/:id",status="200"} 0.30000000000000004',
     );
   });
 });

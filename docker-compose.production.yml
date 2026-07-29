@@ -4,9 +4,9 @@ services:
     restart: unless-stopped
 
     environment:
-      POSTGRES_USER: ${DB_USER:-aiworkspace}
+      POSTGRES_USER: ${DB_USER:-teamsynch-ai}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      POSTGRES_DB: ${DB_NAME:-aiworkspace_prod}
+      POSTGRES_DB: ${DB_NAME:-teamsynch-ai_prod}
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -14,13 +14,13 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready -U ${DB_USER:-aiworkspace} -d ${DB_NAME:-aiworkspace_prod}
+        - pg_isready -U ${DB_USER:-teamsynch-ai} -d ${DB_NAME:-teamsynch-ai_prod}
       interval: 10s
       timeout: 5s
       retries: 5
 
     networks:
-      - aiworkspace
+      - teamsynch-ai
 
   redis:
     image: redis:7-alpine
@@ -48,10 +48,10 @@ services:
       retries: 5
 
     networks:
-      - aiworkspace
+      - teamsynch-ai
 
   migrate:
-    image: aiworkspace-api
+    image: teamsynch-ai-api
 
     command:
       - npm
@@ -59,8 +59,8 @@ services:
       - migrate:deploy
 
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-aiworkspace}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-aiworkspace_prod}
-      DIRECT_DATABASE_URL: postgresql://${DB_USER:-aiworkspace}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-aiworkspace_prod}
+      DATABASE_URL: postgresql://${DB_USER:-teamsynch-ai}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-teamsynch-ai_prod}
+      DIRECT_DATABASE_URL: postgresql://${DB_USER:-teamsynch-ai}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-teamsynch-ai_prod}
 
     depends_on:
       postgres:
@@ -69,10 +69,10 @@ services:
     restart: "no"
 
     networks:
-      - aiworkspace
+      - teamsynch-ai
 
   api:
-    image: aiworkspace-api
+    image: teamsynch-ai-api
 
     build:
       context: .
@@ -85,14 +85,14 @@ services:
 
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${DB_USER:-aiworkspace}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-aiworkspace_prod}
-      DIRECT_DATABASE_URL: postgresql://${DB_USER:-aiworkspace}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-aiworkspace_prod}
+      DATABASE_URL: postgresql://${DB_USER:-teamsynch-ai}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-teamsynch-ai_prod}
+      DIRECT_DATABASE_URL: postgresql://${DB_USER:-teamsynch-ai}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-teamsynch-ai_prod}
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
-      JWT_ISSUER: ${JWT_ISSUER:-aiworkspace-api}
-      JWT_ACCESS_AUDIENCE: ${JWT_ACCESS_AUDIENCE:-aiworkspace-api}
-      JWT_REFRESH_AUDIENCE: ${JWT_REFRESH_AUDIENCE:-aiworkspace-auth}
+      JWT_ISSUER: ${JWT_ISSUER:-teamsynch-ai-api}
+      JWT_ACCESS_AUDIENCE: ${JWT_ACCESS_AUDIENCE:-teamsynch-ai-api}
+      JWT_REFRESH_AUDIENCE: ${JWT_REFRESH_AUDIENCE:-teamsynch-ai-auth}
       FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
       AI_PROVIDER: ${AI_PROVIDER:?AI_PROVIDER is required}
       AI_MODEL: ${AI_MODEL:?AI_MODEL is required}
@@ -117,7 +117,7 @@ services:
       start_period: 15s
 
     networks:
-      - aiworkspace
+      - teamsynch-ai
 
   web:
     build:
@@ -143,12 +143,12 @@ services:
       start_period: 10s
 
     networks:
-      - aiworkspace
+      - teamsynch-ai
 
 volumes:
   postgres_data:
   redis_data:
 
 networks:
-  aiworkspace:
+  teamsynch-ai:
     driver: bridge

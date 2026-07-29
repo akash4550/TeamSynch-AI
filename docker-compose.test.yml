@@ -1,12 +1,12 @@
-name: aiworkspace-test
+name: teamsynch-ai-test
 
 services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: aiworkspace_test
-      POSTGRES_PASSWORD: aiworkspace_test
-      POSTGRES_DB: aiworkspace_test
+      POSTGRES_USER: teamsynch-ai_test
+      POSTGRES_PASSWORD: teamsynch-ai_test
+      POSTGRES_DB: teamsynch-ai_test
     ports:
       - "127.0.0.1:55433:5432"
     volumes:
@@ -15,7 +15,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U aiworkspace_test -d aiworkspace_test",
+          "pg_isready -U teamsynch-ai_test -d teamsynch-ai_test",
         ]
       interval: 5s
       timeout: 5s

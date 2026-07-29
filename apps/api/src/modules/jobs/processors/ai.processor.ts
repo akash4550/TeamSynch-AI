@@ -3,46 +3,72 @@ import { BaseJobData } from '../services/job.service';
 import { AIService } from '../../ai/services/ai.service';
 import { ContextBuilder } from '../../ai/context/context.builder';
 import { PROMPTS } from '../../ai/prompts';
+import { RealtimeService } from '../../realtime/realtime.service';
+import { logger } from '../../../core/utils/logger';
 
-export interface AIJobData extends BaseJobData {
-  taskType: 'SUMMARIZE_PROJECT' | 'SUMMARIZE_DOCUMENT';
-  entityId: string;
+export interface AICompletionJobData extends BaseJobData {
+  taskType: 'TASK_SUMMARY' | 'WORKSPACE_ASSISTANT' | 'SUMMARIZE_PROJECT';
+  contextType?: 'TASK' | 'PROJECT' | 'GLOBAL';
+  entityId?: string;
+  query?: string;
 }
 
-/**
- * Processor for handling heavy AI background tasks to avoid blocking HTTP threads.
- */
-export const aiProcessor = async (job: Job<AIJobData>) => {
-  const { organizationId, userId, taskType, entityId } = job.data;
+export const aiProcessor = async (job: Job<AICompletionJobData>) => {
+  const { organizationId, userId, taskType, contextType, entityId, query } = job.data;
 
   if (!organizationId || !userId) {
     throw new Error('Tenant context (organizationId, userId) missing in AI job payload');
   }
 
   const aiService = new AIService();
+  const realtimeService = new RealtimeService();
 
-  try {
-    if (taskType === 'SUMMARIZE_PROJECT') {
-      const context = await ContextBuilder.buildProjectContext(organizationId, entityId);
-      
-      const response = await aiService.generateCompletion(
-        organizationId,
-        userId,
-        'BACKGROUND_PROJECT_SUMMARY',
-        {
-          systemPrompt: PROMPTS.SYSTEM.DEFAULT_ASSISTANT,
-          prompt: `${PROMPTS.FEATURES.PROJECT_SUMMARY}\n\n${context}`
-        }
-      );
+  logger.info(`[AIWorker] Processing job ${job.id} for org ${organizationId}`);
 
-      // E.g., save response to DB or notify user
-      console.log(`[AIWorker] Generated project summary for org ${organizationId}`);
-      return { success: true, text: response.text };
-    }
+  let promptContext = '';
+  let featureTag = 'WORKSPACE_ASSISTANT';
 
-    throw new Error(`Unsupported AI background task type: ${taskType}`);
-  } catch (error: any) {
-    console.error(`[AIWorker] Job failed: ${error.message}`);
-    throw error;
+  if (taskType === 'TASK_SUMMARY' && entityId) {
+    promptContext = await ContextBuilder.buildTaskContext(organizationId, entityId);
+    featureTag = 'TASK_SUMMARY';
+  } else if (contextType === 'PROJECT' && entityId) {
+    promptContext = await ContextBuilder.buildProjectContext(organizationId, entityId);
+    featureTag = 'PROJECT_SUMMARY';
+  } else if (contextType === 'TASK' && entityId) {
+    promptContext = await ContextBuilder.buildTaskContext(organizationId, entityId);
+  } else {
+    promptContext = 'General Workspace Context';
   }
+
+  const userPrompt = query
+    ? `User Query: ${query}\n\nRelevant Context:\n${promptContext}`
+    : `${PROMPTS.FEATURES.TASK_SUMMARY}\n\n${promptContext}`;
+
+  // Execute LLM completion with token/cost tracking inside AIService
+  const completionResponse = await aiService.generateCompletion(
+    organizationId,
+    userId,
+    featureTag,
+    {
+      systemPrompt: PROMPTS.SYSTEM.DEFAULT_ASSISTANT,
+      prompt: userPrompt,
+    }
+  );
+
+  // Emit real-time completion event to tenant room via Socket.IO/Redis PubSub
+  realtimeService.emitToOrganization(organizationId, 'ai.completion.finished', {
+    jobId: job.id,
+    userId,
+    featureTag,
+    result: completionResponse.text,
+    completedAt: new Date().toISOString(),
+  });
+
+  logger.info(`[AIWorker] Completed job ${job.id} for org ${organizationId}. Emitted realtime event.`);
+
+  return {
+    success: true,
+    jobId: job.id,
+    result: completionResponse.text,
+  };
 };

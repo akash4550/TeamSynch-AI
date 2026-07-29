@@ -4,10 +4,10 @@ import { Sidebar } from '../components/layout/Sidebar';
 import { Topbar } from '../components/layout/Topbar';
 import { useUiStore } from '../store/uiStore';
 import { AIAssistantPanel } from '../features/ai/AIAssistantPanel';
+import { BillingAlertBanner } from '../modules/billing/components/BillingAlertBanner';
 import { Bot } from 'lucide-react';
 
 export const DashboardLayout = () => {
-  // We call this here to ensure the dark mode effect runs on the root layout mount
   useUiStore((state) => state.theme); 
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
@@ -15,6 +15,7 @@ export const DashboardLayout = () => {
     <div className="flex h-screen bg-gray-50 dark:bg-slate-900 overflow-hidden transition-colors">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
+        <BillingAlertBanner />
         <Topbar />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative">
           <Outlet />

@@ -1,4 +1,4 @@
-# AIWorkspace Production Runbook
+# TeamSynch AI Production Runbook
 
 This runbook covers the RC1 single-node Docker Compose deployment defined by `docker-compose.production.yml`.
 

@@ -6,7 +6,7 @@ July 26, 2026
 
 ## Scope
 
-This review addresses npm audit findings for the AIWorkspace production dependency tree.
+This review addresses npm audit findings for the TeamSynch AI production dependency tree.
 
 ## Remediated findings
 
@@ -20,9 +20,9 @@ No forced or unrelated dependency upgrades were applied.
 
 `npm audit --omit=dev` reports `GHSA-qwww-vcr4-c8h2` against `react-router@7.18.1`.
 
-The advisory affects React Server Components mode. AIWorkspace currently uses standard client-side routing through `BrowserRouter`, `Routes`, `Route`, `Navigate`, `Outlet`, `Link`, and navigation hooks. The web application source does not use React Server Components, RSC action APIs, or server-router APIs.
+The advisory affects React Server Components mode. TeamSynch AI currently uses standard client-side routing through `BrowserRouter`, `Routes`, `Route`, `Navigate`, `Outlet`, `Link`, and navigation hooks. The web application source does not use React Server Components, RSC action APIs, or server-router APIs.
 
-The npm-proposed remediation would force `react-router-dom@7.11.0`, introducing a breaking downgrade. Because the affected execution mode is not used by AIWorkspace, the current version is retained as an accepted, non-reachable risk until an upstream patched release is available.
+The npm-proposed remediation would force `react-router-dom@7.11.0`, introducing a breaking downgrade. Because the affected execution mode is not used by TeamSynch AI, the current version is retained as an accepted, non-reachable risk until an upstream patched release is available.
 
 ## Validation
 
@@ -40,6 +40,6 @@ The remediation was validated with:
 
 Reassess this decision when:
 
-- AIWorkspace introduces React Server Components or server actions.
+- TeamSynch AI introduces React Server Components or server actions.
 - React Router publishes a patched compatible release.
 - The advisory scope or exploitability changes.

@@ -6,37 +6,46 @@ export class RealtimeService {
     eventBus.onEvent('TaskCreated', this.handleTaskCreated);
     eventBus.onEvent('TaskUpdated', this.handleTaskUpdated);
     eventBus.onEvent('TaskAssigned', this.handleTaskAssigned);
-    // Future listeners...
     console.log('Realtime Service: EventBus listeners attached');
   }
 
+  public emitToOrganization(organizationId: string, event: string, payload: any) {
+    try {
+      const io = getIO();
+      const orgRoom = organizationRoom(organizationId);
+      io.to(orgRoom).emit(event, payload);
+    } catch (error) {
+      console.warn(`[RealtimeService] Socket.io not initialized or room emit skipped:`, error);
+    }
+  }
+
+  public emitToUser(userId: string, event: string, payload: any) {
+    try {
+      const io = getIO();
+      const uRoom = userRoom(userId);
+      io.to(uRoom).emit(event, payload);
+    } catch (error) {
+      console.warn(`[RealtimeService] Socket.io not initialized or user emit skipped:`, error);
+    }
+  }
+
   private handleTaskCreated = (payload: EventPayload) => {
-    const io = getIO();
-    const orgRoom = organizationRoom(payload.organizationId);
-    io.to(orgRoom).emit('task.created', payload);
+    this.emitToOrganization(payload.organizationId, 'task.created', payload);
   };
 
   private handleTaskUpdated = (payload: EventPayload) => {
-    const io = getIO();
-    const orgRoom = organizationRoom(payload.organizationId);
-    io.to(orgRoom).emit('task.updated', payload);
+    this.emitToOrganization(payload.organizationId, 'task.updated', payload);
   };
 
   private handleTaskAssigned = (payload: EventPayload) => {
-    const io = getIO();
-    const orgRoom = organizationRoom(payload.organizationId);
-    
-    // Broadcast to org so Kanban boards update
-    io.to(orgRoom).emit('task.assigned', payload);
-    
-    // Send direct notification to assignee if it's not the same user
+    this.emitToOrganization(payload.organizationId, 'task.assigned', payload);
+
     if (payload.assigneeId && payload.assigneeId !== payload.actorId) {
-      const assigneeRoom = userRoom(payload.assigneeId);
-      io.to(assigneeRoom).emit('notification.new', {
+      this.emitToUser(payload.assigneeId, 'notification.new', {
         title: 'New Task Assigned',
         message: `You were assigned to task: ${payload.taskTitle}`,
         link: `/tasks/${payload.taskId}`,
-        createdAt: new Date()
+        createdAt: new Date(),
       });
     }
   };

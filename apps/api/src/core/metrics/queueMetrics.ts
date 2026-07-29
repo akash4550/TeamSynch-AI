@@ -29,21 +29,21 @@ interface QueueDepthSource {
 }
 
 export const queueJobsCompletedTotal = new Counter({
-  name: 'aiworkspace_queue_jobs_completed_total',
+  name: 'teamsynch_ai_queue_jobs_completed_total',
   help: 'Total number of successfully completed queue jobs',
   labelNames: QUEUE_RESULT_LABEL_NAMES,
   registers: [metricsRegistry],
 });
 
 export const queueJobsFailedTotal = new Counter({
-  name: 'aiworkspace_queue_jobs_failed_total',
+  name: 'teamsynch_ai_queue_jobs_failed_total',
   help: 'Total number of failed queue jobs',
   labelNames: QUEUE_RESULT_LABEL_NAMES,
   registers: [metricsRegistry],
 });
 
 export const queueDepth = new Gauge({
-  name: 'aiworkspace_queue_depth',
+  name: 'teamsynch_ai_queue_depth',
   help: 'Current number of queue jobs by state',
   labelNames: QUEUE_DEPTH_LABEL_NAMES,
   registers: [metricsRegistry],

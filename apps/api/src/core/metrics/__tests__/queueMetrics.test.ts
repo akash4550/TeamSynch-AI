@@ -32,10 +32,10 @@ describe('queue metrics', () => {
     const metrics = await metricsRegistry.metrics();
 
     expect(metrics).toContain(
-      'aiworkspace_queue_jobs_completed_total{queue="emailQueue"} 2',
+      'teamsynch_ai_queue_jobs_completed_total{queue="emailQueue"} 2',
     );
     expect(metrics).toContain(
-      'aiworkspace_queue_jobs_failed_total{queue="emailQueue"} 1',
+      'teamsynch_ai_queue_jobs_failed_total{queue="emailQueue"} 1',
     );
   });
 
@@ -61,16 +61,16 @@ describe('queue metrics', () => {
       'failed',
     );
     expect(metrics).toContain(
-      'aiworkspace_queue_depth{queue="analyticsQueue",state="waiting"} 4',
+      'teamsynch_ai_queue_depth{queue="analyticsQueue",state="waiting"} 4',
     );
     expect(metrics).toContain(
-      'aiworkspace_queue_depth{queue="analyticsQueue",state="active"} 2',
+      'teamsynch_ai_queue_depth{queue="analyticsQueue",state="active"} 2',
     );
     expect(metrics).toContain(
-      'aiworkspace_queue_depth{queue="analyticsQueue",state="delayed"} 3',
+      'teamsynch_ai_queue_depth{queue="analyticsQueue",state="delayed"} 3',
     );
     expect(metrics).toContain(
-      'aiworkspace_queue_depth{queue="analyticsQueue",state="failed"} 1',
+      'teamsynch_ai_queue_depth{queue="analyticsQueue",state="failed"} 1',
     );
   });
 });

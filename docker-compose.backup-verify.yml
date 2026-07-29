@@ -1,12 +1,12 @@
-name: aiworkspace-backup-verify
+name: teamsynch-ai-backup-verify
 
 services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: aiworkspace_restore
-      POSTGRES_PASSWORD: aiworkspace_restore
-      POSTGRES_DB: aiworkspace_restore
+      POSTGRES_USER: teamsynch-ai_restore
+      POSTGRES_PASSWORD: teamsynch-ai_restore
+      POSTGRES_DB: teamsynch-ai_restore
     ports:
       - "127.0.0.1:55434:5432"
     volumes:
@@ -15,7 +15,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U aiworkspace_restore -d aiworkspace_restore",
+          "pg_isready -U teamsynch-ai_restore -d teamsynch-ai_restore",
         ]
       interval: 5s
       timeout: 5s

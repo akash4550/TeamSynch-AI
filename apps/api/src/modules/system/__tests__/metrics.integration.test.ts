@@ -148,39 +148,39 @@ describe('protected metrics endpoint', () => {
   );
 
   expect(body).toContain(
-    '# HELP aiworkspace_http_requests_total',
+    '# HELP teamsynch-ai_http_requests_total',
   );
 
   expect(body).toContain(
-    '# HELP aiworkspace_http_request_duration_seconds',
+    '# HELP teamsynch-ai_http_request_duration_seconds',
   );
 
   expect(body).toContain(
-    'aiworkspace_process_cpu_user_seconds_total',
+    'teamsynch-ai_process_cpu_user_seconds_total',
   );
 
   expect(body).toContain(
-    '# HELP aiworkspace_queue_depth',
+    '# HELP teamsynch-ai_queue_depth',
   );
 
   expect(body).toContain(
-    'aiworkspace_queue_depth{queue="emailQueue",state="waiting"}',
+    'teamsynch-ai_queue_depth{queue="emailQueue",state="waiting"}',
   );
 
   expect(body).toContain(
-    'aiworkspace_dependency_up{dependency="postgres"} 1',
+    'teamsynch-ai_dependency_up{dependency="postgres"} 1',
   );
 
   expect(body).toContain(
-    'aiworkspace_dependency_up{dependency="redis"} 1',
+    'teamsynch-ai_dependency_up{dependency="redis"} 1',
   );
 
   expect(body).toContain(
-    'aiworkspace_dependency_check_duration_seconds_count{dependency="postgres",result="success"} 1',
+    'teamsynch-ai_dependency_check_duration_seconds_count{dependency="postgres",result="success"} 1',
   );
 
   expect(body).toContain(
-    'aiworkspace_dependency_check_duration_seconds_count{dependency="redis",result="success"} 1',
+    'teamsynch-ai_dependency_check_duration_seconds_count{dependency="redis",result="success"} 1',
   );
 });
 });

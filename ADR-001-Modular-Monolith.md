@@ -4,7 +4,7 @@
 Accepted
 
 ## Context
-AIWorkspace is a complex, multi-tenant enterprise SaaS platform that requires strict data isolation, high performance, and rapid feature iteration. We evaluated Microservices vs. a Monolithic architecture.
+TeamSynch AI is a complex, multi-tenant enterprise SaaS platform that requires strict data isolation, high performance, and rapid feature iteration. We evaluated Microservices vs. a Monolithic architecture.
 - **Microservices** offer independent scaling and deployment but introduce massive operational overhead (network latency, distributed tracing, complex CI/CD, data consistency issues).
 - **Traditional Monoliths** are easy to deploy but often become "big balls of mud" with highly coupled, untestable code.
 

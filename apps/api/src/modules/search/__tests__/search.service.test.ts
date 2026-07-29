@@ -69,6 +69,7 @@ describe('SearchService', () => {
           'projects',
           'tasks',
           'crm',
+          'documents',
         ],
       }),
     );

@@ -22,14 +22,14 @@ export const DEPENDENCY_RESULTS = [
 type DependencyResult = typeof DEPENDENCY_RESULTS[number];
 
 export const dependencyUp = new Gauge({
-  name: 'aiworkspace_dependency_up',
+  name: 'teamsynch_ai_dependency_up',
   help: 'Whether an application dependency is currently reachable',
   labelNames: DEPENDENCY_LABEL_NAMES,
   registers: [metricsRegistry],
 });
 
 export const dependencyCheckDurationSeconds = new Histogram({
-  name: 'aiworkspace_dependency_check_duration_seconds',
+  name: 'teamsynch_ai_dependency_check_duration_seconds',
   help: 'Duration of application dependency health checks in seconds',
   labelNames: DEPENDENCY_DURATION_LABEL_NAMES,
   buckets: [

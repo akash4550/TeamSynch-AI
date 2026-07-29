@@ -13,7 +13,7 @@ export const LandingPage = () => {
       <nav className="h-16 px-6 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 sticky top-0 z-50">
         <div className="flex items-center gap-2">
           <BrainCircuit className="w-8 h-8 text-blue-600" />
-          <span className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">AIWorkspace</span>
+          <span className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">TeamSynch AI</span>
         </div>
         <div>
           <Button variant="light" onClick={() => navigate('/login')} className="mr-2 hidden sm:inline-flex">Sign In</Button>
