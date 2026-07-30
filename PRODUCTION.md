@@ -126,8 +126,8 @@ docker compose \
 
 The resulting local images are:
 
-- `aiworkspace-api`
-- `aiworkspace-web`
+- `teamsynch-ai-api`
+- `teamsynch-ai-web`
 
 The migration service uses the same image as the API.
 
@@ -376,9 +376,9 @@ production traffic has been observed to establish normal baselines.
 Example PromQL expressions:
 
 ~~~promql
-sum(rate(aiworkspace_http_request_errors_total[5m]))
+sum(rate(teamsynch_ai_http_request_errors_total[5m]))
 /
-clamp_min(sum(rate(aiworkspace_http_requests_total[5m])), 0.001)
+clamp_min(sum(rate(teamsynch_ai_http_requests_total[5m])), 0.001)
 > 0.05
 ~~~
 
@@ -386,26 +386,26 @@ clamp_min(sum(rate(aiworkspace_http_requests_total[5m])), 0.001)
 histogram_quantile(
   0.95,
   sum by (le) (
-    rate(aiworkspace_http_request_duration_seconds_bucket[5m])
+    rate(teamsynch_ai_http_request_duration_seconds_bucket[5m])
   )
 ) > 1
 ~~~
 
 ~~~promql
 min by (dependency) (
-  aiworkspace_dependency_up
+  teamsynch_ai_dependency_up
 ) == 0
 ~~~
 
 ~~~promql
 max by (queue) (
-  aiworkspace_queue_depth{state="waiting"}
+  teamsynch_ai_queue_depth{state="waiting"}
 ) > 100
 ~~~
 
 ~~~promql
 sum by (queue) (
-  increase(aiworkspace_queue_jobs_failed_total[10m])
+  increase(teamsynch_ai_queue_jobs_failed_total[10m])
 ) > 5
 ~~~
 
@@ -450,8 +450,8 @@ npm run backup:production
 
 A successful command creates two ignored files under `backups/`:
 
-- `aiworkspace-production-<UTC_TIMESTAMP>.dump`
-- `aiworkspace-production-<UTC_TIMESTAMP>.dump.manifest.json`
+- `teamsynch-ai-production-<UTC_TIMESTAMP>.dump`
+- `teamsynch-ai-production-<UTC_TIMESTAMP>.dump.manifest.json`
 
 The manifest records the backup size, SHA-256 hash, source type, applied
 migration count, and representative table row counts.
@@ -459,7 +459,7 @@ migration count, and representative table row counts.
 Verify a selected backup through a real isolated restore:
 
 ```bash
-npm run backup:verify -- backups/aiworkspace-production-<UTC_TIMESTAMP>.dump
+npm run backup:verify -- backups/teamsynch-ai-production-<UTC_TIMESTAMP>.dump
 ```
 
 Verification checks the hash, recreates a fresh disposable database on

@@ -32,7 +32,7 @@
    ```bash
    npm run seed -w apps/api
    ```
-   *This creates a default user `demo@aiworkspace.com` with password `password123`.*
+   *This creates a default user `demo@teamsynch-ai.local` with password `password123`.*
 
 5. **Run the Application**
    Start both the backend API and frontend Vite dev server concurrently:
