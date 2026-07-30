@@ -1,4 +1,4 @@
-name: AIWorkspace CI
+name: TeamSynch AI CI
 on:
   push:
     branches:
