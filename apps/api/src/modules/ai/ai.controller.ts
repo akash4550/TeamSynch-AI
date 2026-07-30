@@ -3,6 +3,7 @@ import { getValidatedRequest } from '../../core/middlewares/validateRequest';
 import { AskAssistantRequest, SummarizeTaskRequest } from './ai.dto';
 import { aiQueue } from '../jobs/queues';
 import { RAGService } from './services/rag.service';
+import { ContextBuilder } from './context/context.builder';
 
 const ragService = new RAGService();
 
@@ -11,6 +12,8 @@ export class AIController {
     const { params } = getValidatedRequest<SummarizeTaskRequest>(req);
     const organizationId = req.user!.organizationId;
     const userId = req.user!.id;
+
+    await ContextBuilder.buildTaskContext(organizationId, params.taskId);
 
     const job = await aiQueue.add('AI_GENERATE_COMPLETION', {
       organizationId,
@@ -33,6 +36,12 @@ export class AIController {
     const { body } = getValidatedRequest<AskAssistantRequest>(req);
     const organizationId = req.user!.organizationId;
     const userId = req.user!.id;
+
+    if (body.contextType === 'TASK' && body.entityId) {
+      await ContextBuilder.buildTaskContext(organizationId, body.entityId);
+    } else if (body.contextType === 'PROJECT' && body.entityId) {
+      await ContextBuilder.buildProjectContext(organizationId, body.entityId);
+    }
 
     const job = await aiQueue.add('AI_GENERATE_COMPLETION', {
       organizationId,

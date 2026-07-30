@@ -131,6 +131,31 @@ export class PostgresSearchProvider implements SearchProvider {
           }))
         )
       );
+
+      searches.push(
+        prisma.$queryRaw<any[]>`
+          SELECT id, title, COALESCE(source, 'Lead') AS description,
+                 ts_rank(to_tsvector('english', title || ' ' || COALESCE(source, '')), websearch_to_tsquery('english', ${formattedTerm})) AS score
+          FROM "Lead"
+          WHERE "organizationId" = ${organizationId}
+            AND "deletedAt" IS NULL
+            AND (
+              to_tsvector('english', title || ' ' || COALESCE(source, '')) @@ websearch_to_tsquery('english', ${formattedTerm})
+              OR title ILIKE ${'%' + formattedTerm + '%'}
+            )
+          ORDER BY score DESC
+          LIMIT ${queryLimit}
+        `.then((results) =>
+          results.map((r) => ({
+            id: r.id,
+            module: 'crm',
+            title: r.title,
+            description: `Lead from ${r.description}`,
+            url: `/crm/leads/${r.id}`,
+            score: Number(r.score) || 0.5,
+          }))
+        )
+      );
     }
 
     if (searchableModules.includes('documents')) {

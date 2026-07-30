@@ -35,8 +35,8 @@ RUN npm ci --omit=dev --ignore-scripts --workspace=api --include-workspace-root=
 # Copy built artifacts from builder
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
-COPY --from=builder /app/apps/api/node_modules/@prisma ./apps/api/node_modules/@prisma
-COPY --from=builder /app/apps/api/node_modules/.prisma ./apps/api/node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 WORKDIR /app/apps/api
 

@@ -1,7 +1,6 @@
 import OpenAI from 'openai';
 
 import { OpenAIProvider } from '../providers/openai.provider';
-import { beforeEach } from 'node:test';
 
 const mockCreate = jest.fn();
 
