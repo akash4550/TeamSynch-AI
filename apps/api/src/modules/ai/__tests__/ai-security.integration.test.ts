@@ -420,26 +420,14 @@ describe('AI route authentication and validation', () => {
       },
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
     expect(response.body?.data).toEqual(
-      expect.any(String),
+      expect.objectContaining({
+        jobId: expect.any(String),
+        status: 'QUEUED',
+        checkStatusUrl: expect.any(String),
+      }),
     );
-
-    const usageLog =
-      await prisma.aIUsageLog.findFirst({
-        where: {
-          organizationId:
-            primaryOrganizationId,
-          userId: primaryEmployee.id,
-          feature: 'WORKSPACE_ASSISTANT',
-        },
-      });
-
-    expect(usageLog).toMatchObject({
-      provider: PrismaAIProvider.MOCK,
-      model: 'mock-model-v1',
-      success: true,
-    });
   });
 
   test('rejects an invalid task identifier', async () => {
@@ -536,25 +524,14 @@ describe('AI context tenant isolation', () => {
       actor: primaryAdmin,
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
     expect(response.body?.data).toEqual(
-      expect.any(String),
+      expect.objectContaining({
+        jobId: expect.any(String),
+        status: 'QUEUED',
+        checkStatusUrl: expect.any(String),
+      }),
     );
-
-    const usageLog =
-      await prisma.aIUsageLog.findFirst({
-        where: {
-          organizationId:
-            primaryOrganizationId,
-          userId: primaryAdmin.id,
-          feature: 'TASK_SUMMARY',
-        },
-      });
-
-    expect(usageLog).toMatchObject({
-      provider: PrismaAIProvider.MOCK,
-      success: true,
-    });
   });
 
   test('hides a task from another tenant', async () => {
