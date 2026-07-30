@@ -152,7 +152,7 @@ function cookieFrom(response) {
   const setCookies = typeof response.headers.getSetCookie === 'function'
     ? response.headers.getSetCookie()
     : [response.headers.get('set-cookie')].filter(Boolean);
-  const refreshCookie = setCookies.find((value) => value.startsWith('aiworkspace_refresh='));
+  const refreshCookie = setCookies.find((value) => value.startsWith('teamsynch-ai_refresh='));
   if (!refreshCookie) {
     throw new Error('Authentication response did not set the refresh cookie');
   }
