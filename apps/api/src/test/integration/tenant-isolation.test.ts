@@ -1,6 +1,8 @@
 import request from 'supertest';
 import app from '../../app';
 import { prisma } from '../../config/prisma';
+import { closeRedisClient } from '../../core/redis/redis.client';
+import { allQueues } from '../../modules/jobs/queues';
 import { signAccessToken } from '../../core/security/jwt';
 import { Role } from '@prisma/client';
 
@@ -88,6 +90,8 @@ describe('Tenant Isolation & Soft-Delete Security Integration Tests', () => {
     await prisma.refreshToken.deleteMany();
     await prisma.user.deleteMany();
     await prisma.organization.deleteMany();
+    await Promise.all(allQueues.map((queue) => queue.close()));
+    await closeRedisClient();
     await prisma.$disconnect();
   });
 
@@ -118,7 +122,7 @@ describe('Tenant Isolation & Soft-Delete Security Integration Tests', () => {
       expect(response.status).toBe(200);
       expect(response.body.data).toBeDefined();
 
-      const returnedProjectIds = response.body.data.map((p: any) => p.id);
+      const returnedProjectIds = response.body.data.projects.map((p: any) => p.id);
       expect(returnedProjectIds).toContain(projectAId);
       expect(returnedProjectIds).not.toContain(projectBId);
     });
@@ -140,7 +144,7 @@ describe('Tenant Isolation & Soft-Delete Security Integration Tests', () => {
         });
 
       expect(createResponse.status).toBe(201);
-      taskId = createResponse.body.data.id;
+      taskId = createResponse.body.id;
       expect(taskId).toBeDefined();
 
       // 2. Verify task appears in Org A task list

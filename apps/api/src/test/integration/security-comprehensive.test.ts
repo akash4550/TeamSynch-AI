@@ -2,6 +2,8 @@ import request from 'supertest';
 import express from 'express';
 import app from '../../app';
 import { prisma } from '../../config/prisma';
+import { closeRedisClient } from '../../core/redis/redis.client';
+import { allQueues } from '../../modules/jobs/queues';
 import { signAccessToken } from '../../core/security/jwt';
 import { Role } from '@prisma/client';
 import { errorMiddleware } from '../../core/middlewares/errorMiddleware';
@@ -91,6 +93,8 @@ describe('Comprehensive Security & OWASP ASVS Integration Tests', () => {
     await prisma.refreshToken.deleteMany();
     await prisma.user.deleteMany();
     await prisma.organization.deleteMany();
+    await Promise.all(allQueues.map((queue) => queue.close()));
+    await closeRedisClient();
     await prisma.$disconnect();
   });
 
