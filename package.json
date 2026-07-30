@@ -53,6 +53,9 @@
     "typescript": "^5.9.3"
   },
   "optionalDependencies": {
-    "@rolldown/binding-linux-x64-gnu": "1.2.1"
+    "@esbuild/linux-x64": "0.28.1",
+    "@rolldown/binding-linux-x64-gnu": "1.2.1",
+    "@tailwindcss/oxide-linux-x64-gnu": "4.3.3",
+    "lightningcss-linux-x64-gnu": "1.32.0"
   }
 }
