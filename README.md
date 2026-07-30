@@ -75,8 +75,8 @@ TeamSynch AI is an intelligent, multi-tenant business operating system built for
 
 ### 1. Clone & Install
 ```bash
-git clone https://github.com/akash4550/TeamSynch AI.git
-cd TeamSynch AI
+git clone https://github.com/akash4550/TeamSynch-AI.git
+cd TeamSynch-AI
 npm install
 ```
 
@@ -85,12 +85,12 @@ npm install
 docker compose up -d postgres redis
 ```
 
-### 3. Database Setup & Migrations
+### 3. Database Setup & Local Sync
 ```bash
 # Generate Prisma Client
 npm run generate
 
-# Apply Database Schema & Seed Initial Data
+# Apply Local Database Schema & Seed Initial Data
 npm run db:push -w apps/api
 npm run seed -w apps/api
 ```
@@ -125,6 +125,8 @@ npm run test:integration
 
 ## 📦 Production Deployment
 
+Production deployments MUST run `npx prisma migrate deploy` rather than `db:push` to apply committed database schema migrations deterministically.
+
 ### 1. Build Production Container
 ```bash
 cp .env.production.example .env.production
@@ -142,6 +144,7 @@ docker compose -f docker-compose.production.yml up -d --build
 - [Product Vision & Roadmap](PRODUCT_VISION.md)
 - [Production Runbook](PRODUCTION.md)
 - [Architecture Decision Record (ADR-001)](ADR-001-Modular-Monolith.md)
+- [Security Policy](SECURITY.md)
 
 ---
 
