@@ -6,7 +6,7 @@ const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 const composeFile = path.join(repositoryRoot, 'docker-compose.test.yml');
 
 const localDatabaseUrl =
-  'postgresql://aiworkspace_test:aiworkspace_test@127.0.0.1:55433/aiworkspace_test';
+  'postgresql://teamsynch-ai_test:teamsynch-ai_test@127.0.0.1:55433/teamsynch-ai_test';
 const localRedisUrl = 'redis://127.0.0.1:56379';
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -57,8 +57,8 @@ function assertSafeTestDatabaseUrl(rawUrl) {
     !protocolAllowed
     || !hostnameAllowed
     || !portAllowed
-    || username !== 'aiworkspace_test'
-    || databaseName !== 'aiworkspace_test'
+    || username !== 'teamsynch-ai_test'
+    || !['teamsynch-ai_test', 'teamsynch-ai_test_db'].includes(databaseName)
   ) {
     throw new Error(
       'Refusing to use a database that is not the dedicated local test database.',
