@@ -2,7 +2,7 @@ name: teamsynch-ai-test
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:0.8.5-pg15-bookworm
     environment:
       POSTGRES_USER: teamsynch-ai_test
       POSTGRES_PASSWORD: teamsynch-ai_test
