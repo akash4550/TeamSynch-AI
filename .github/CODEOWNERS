@@ -1,0 +1,9 @@
+# Default repository owner
+* @akash4550
+
+# Security-sensitive and operational areas
+/.github/ @akash4550
+/apps/api/ @akash4550
+/apps/api/prisma/ @akash4550
+/docker-compose*.yml @akash4550
+/SECURITY.md @akash4550
