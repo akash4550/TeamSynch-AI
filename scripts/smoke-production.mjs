@@ -79,7 +79,7 @@ function findChromiumBrowser() {
 }
 
 function assertBrowserRender(chromePath) {
-  const userDataDirectory = mkdtempSync(path.join(tmpdir(), 'aiworkspace-smoke-'));
+  const userDataDirectory = mkdtempSync(path.join(tmpdir(), 'teamsynch-ai-smoke-'));
   let result;
 
   try {

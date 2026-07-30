@@ -41,7 +41,7 @@ const requestedBackup = process.argv[3];
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const verificationDatabaseUrl =
-  'postgresql://aiworkspace_restore:aiworkspace_restore@127.0.0.1:55434/aiworkspace_restore';
+  'postgresql://teamsynch-ai_restore:teamsynch-ai_restore@127.0.0.1:55434/teamsynch-ai_restore';
 
 const sourceConfigurations = {
   test: {
@@ -326,7 +326,7 @@ function createBackup(configuration) {
   mkdirSync(backupsDirectory, { recursive: true });
 
   const backupName =
-    `aiworkspace-${configuration.label}-${timestamp()}.dump`;
+    `teamsynch-ai-${configuration.label}-${timestamp()}.dump`;
   const backupPath = path.join(backupsDirectory, backupName);
   const manifestPath = `${backupPath}.manifest.json`;
   const containerBackupPath = `/tmp/${backupName}`;
@@ -421,9 +421,9 @@ function validateVerificationTarget() {
   );
 
   if (
-    configuration.name !== 'aiworkspace-backup-verify'
-    || environment.POSTGRES_USER !== 'aiworkspace_restore'
-    || environment.POSTGRES_DB !== 'aiworkspace_restore'
+    configuration.name !== 'teamsynch-ai-backup-verify'
+    || environment.POSTGRES_USER !== 'teamsynch-ai_restore'
+    || environment.POSTGRES_DB !== 'teamsynch-ai_restore'
     || !publishedPort
   ) {
     throw new Error(
@@ -445,8 +445,8 @@ function assertVerificationDatabaseUrl(rawUrl) {
     databaseUrl.protocol !== 'postgresql:'
     || hostname !== '127.0.0.1'
     || port !== '55434'
-    || username !== 'aiworkspace_restore'
-    || databaseName !== 'aiworkspace_restore'
+    || username !== 'teamsynch-ai_restore'
+    || databaseName !== 'teamsynch-ai_restore'
   ) {
     throw new Error(
       'Refusing migration verification outside the isolated restore database.',

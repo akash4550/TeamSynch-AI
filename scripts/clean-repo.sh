@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo "=================================================="
-echo "   AIWorkspace Repository Sanitization & Sweep   "
+echo "   TeamSynch AI Repository Sanitization & Sweep   "
 echo "=================================================="
 
 # 1. Remove build artifacts, cache stores, and test coverage outputs
