@@ -63,14 +63,11 @@ export class LocalStorageProvider implements IStorageProvider {
 
     const targetPath = this.resolveStoragePath(storageKey);
 
-    if (file.buffer) {
-      fs.writeFileSync(targetPath, file.buffer);
-    } else if (file.path) {
-      fs.copyFileSync(file.path, targetPath);
-      fs.unlinkSync(file.path);
-    } else {
-      throw new Error('No file buffer or path provided in payload');
+    if (!file.buffer) {
+      throw new Error('No file buffer provided in payload');
     }
+
+    fs.writeFileSync(targetPath, file.buffer);
 
     return {
       key: storageKey,
