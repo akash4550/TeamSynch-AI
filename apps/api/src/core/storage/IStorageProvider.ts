@@ -10,7 +10,6 @@ export interface StorageFilePayload {
   mimetype: string;
   size: number;
   buffer?: Buffer;
-  path?: string;
 }
 
 export interface IStorageProvider {
