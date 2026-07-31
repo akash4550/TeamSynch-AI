@@ -13,6 +13,40 @@ const refreshCookieOptions: CookieOptions = {
   path: REFRESH_COOKIE_PATH,
 };
 
+const readCookieValue = (
+  cookieHeader: string | undefined,
+  cookieName: string,
+): string | undefined => {
+  if (!cookieHeader) {
+    return undefined;
+  }
+
+  for (const cookie of cookieHeader.split(';')) {
+    const separatorIndex = cookie.indexOf('=');
+    if (separatorIndex < 1) {
+      continue;
+    }
+
+    const name = cookie.slice(0, separatorIndex).trim();
+    if (name !== cookieName) {
+      continue;
+    }
+
+    const rawValue = cookie.slice(separatorIndex + 1).trim();
+    if (rawValue.length === 0) {
+      return undefined;
+    }
+
+    try {
+      return decodeURIComponent(rawValue);
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+};
+
 export const setRefreshCookie = (response: Response, token: string): void => {
   const claims = verifyRefreshToken(token);
   response.cookie(REFRESH_COOKIE_NAME, token, {
@@ -26,6 +60,5 @@ export const clearRefreshCookie = (response: Response): void => {
 };
 
 export const readRefreshCookie = (request: Request): string | undefined => {
-  const value = request.cookies?.[REFRESH_COOKIE_NAME];
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
+  return readCookieValue(request.headers.cookie, REFRESH_COOKIE_NAME);
 };
