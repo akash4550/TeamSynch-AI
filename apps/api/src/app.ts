@@ -1,6 +1,5 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
-import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import path from 'path';
 
@@ -16,6 +15,7 @@ import clientRoutes from './modules/crm/clients/client.routes';
 import contactRoutes from './modules/crm/contacts/contact.routes';
 import leadRoutes from './modules/crm/leads/lead.routes';
 import opportunityRoutes from './modules/crm/opportunities/opportunity.routes';
+import crmPipelineRoutes from './modules/crm/pipeline/crm-pipeline.routes';
 import pipelineRoutes from './modules/crm/pipeline/pipeline.routes';
 import activityRoutes from './modules/crm/activities/activity.routes';
 import analyticsRoutes from './modules/analytics/analytics.routes';
@@ -68,7 +68,6 @@ app.post(
   asyncWrapper(billingController.handleWebhook.bind(billingController))
 );
 
-app.use(cookieParser());
 app.use(express.json());
 
 app.get('/health', (req: Request, res: Response) => {
@@ -123,6 +122,7 @@ app.use('/api/v1/crm/clients', clientRoutes);
 app.use('/api/v1/crm/contacts', contactRoutes);
 app.use('/api/v1/crm/leads', leadRoutes);
 app.use('/api/v1/crm/opportunities', opportunityRoutes);
+app.use('/api/v1/crm/pipeline-stages', crmPipelineRoutes);
 app.use('/api/v1/crm/pipeline-stages', pipelineRoutes);
 app.use('/api/v1/crm/activities', activityRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
