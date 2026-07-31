@@ -54,9 +54,10 @@ services:
     image: teamsynch-ai-api
 
     command:
-      - npm
-      - run
-      - migrate:deploy
+      - node
+      - /app/node_modules/prisma/build/index.js
+      - migrate
+      - deploy
 
     environment:
       DATABASE_URL: postgresql://${DB_USER:-teamsynch-ai}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-teamsynch-ai_prod}
