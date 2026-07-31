@@ -38,6 +38,7 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 # Copy built artifacts from builder
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
+COPY apps/api/docker-entrypoint.sh ./apps/api/docker-entrypoint.sh
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
@@ -56,4 +57,4 @@ ENV PORT=4000
 EXPOSE 4000
 
 # Start the Node.js application as unprivileged user
-CMD ["node", "dist/server.js"]
+CMD ["sh", "/app/apps/api/docker-entrypoint.sh"]
