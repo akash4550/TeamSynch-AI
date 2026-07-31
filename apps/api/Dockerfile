@@ -32,6 +32,9 @@ COPY package*.json ./
 COPY apps/api/package*.json ./apps/api/
 RUN npm ci --omit=dev --ignore-scripts --workspace=api --include-workspace-root=false
 
+# npm is required only during dependency installation, not at runtime
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 # Copy built artifacts from builder
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
