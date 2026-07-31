@@ -114,11 +114,11 @@ jobs:
         run: npm run smoke:production
 
       - name: Run Trivy Vulnerability Scanner on API Image
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: teamsynch-ai-api:latest
           format: table
-          exit-code: 0
+          exit-code: 1
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
