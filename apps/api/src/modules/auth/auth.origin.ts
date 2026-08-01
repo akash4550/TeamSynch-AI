@@ -11,11 +11,6 @@ export const requireTrustedAuthOrigin = (
   next: NextFunction,
 ): void => {
   const origin = request.headers.origin;
-  if (request.headers['sec-fetch-site'] === 'cross-site') {
-    next(new AppError('Origin not allowed', 403));
-    return;
-  }
-
   // Non-browser clients may omit Origin. Browser mutation requests include it,
   // and SameSite=Strict prevents the refresh cookie from being sent cross-site.
   if (origin === undefined) {
