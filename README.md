@@ -1,152 +1,322 @@
-# 🚀 TeamSynch AI
+# TeamSynch AI
 
-A Production-Grade, Multi-Tenant Enterprise SaaS Platform
+A production-oriented, multi-tenant SaaS workspace for projects, tasks, teams, CRM operations, documents, analytics, billing, and organization administration.
 
-TeamSynch AI is an intelligent, multi-tenant business operating system built for small and mid-sized teams (5–100 employees). It unifies Project Execution, Task Management, CRM Pipelines, Document Management, Real-Time Collaboration, AI Intelligence, and Automated Compliance into a single operational workspace.
+TeamSynch AI demonstrates full-stack engineering with tenant isolation, role-based authorization, secure authentication, background queues, real-time infrastructure, automated testing, and cloud deployment.
 
----
+## Live Application
 
-## 🏗️ Architectural Topology
+| Service | Address |
+| --- | --- |
+| Web application | https://teamsynch-ai.netlify.app |
+| API service | https://teamsynch-ai.onrender.com |
+| Liveness check | https://teamsynch-ai.onrender.com/api/v1/system/live |
+| Readiness check | https://teamsynch-ai.onrender.com/api/v1/system/ready |
+| Source code | https://github.com/akash4550/TeamSynch-AI |
+| Latest release | https://github.com/akash4550/TeamSynch-AI/releases/tag/v1.0.0 |
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ 1. EXPERIENCE LAYER                                                         │
-│ React 19, TypeScript, Vite, Tailwind CSS, Tremor, TanStack Query, Zustand   │
-│ Code-Split Routes (React.lazy), Virtualized 60fps Lists, Optimistic UI      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 2. BUSINESS DOMAIN LAYER (MODULAR MONOLITH)                                │
-│ Organizations, Users, Teams, Projects, Tasks, CRM, Documents, Analytics     │
-│ Granular RBAC Policy Engine, Extended BaseTenantRepository, Cursor Queries  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 3. INTELLIGENCE & AUTOMATION LAYER                                         │
-│ PostgreSQL pgvector RAG Engine, Yjs CRDT Engine, BullMQ Background Queue   │
-│ Two-Way Calendar Sync, AES-256 Token Encryption, Stripe Billing Webhooks   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 4. INFRASTRUCTURE & PLATFORM LAYER                                          │
-│ Docker Rootless Multi-Stage Container, PostgreSQL 15, Redis 7, Nginx       │
-│ Prometheus Observability Metrics, Signal Graceful Shutdown (SIGTERM)       │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+The hosted application is a portfolio demonstration environment. Demo access is available from the repository owner on request.
 
----
+## Highlights
 
-## ✨ Core Enterprise Features
+- Multi-tenant data isolation using organization-scoped database operations
+- JWT access and refresh-token authentication
+- Secure HTTP-only refresh cookies
+- Role-based access control and granular permission middleware
+- Project and task management
+- Team membership and invitation management
+- CRM clients, contacts, leads, opportunities, and pipelines
+- Document and calendar modules
+- Analytics and organization administration
+- Stripe webhook verification and billing entitlement checks
+- Redis and BullMQ background processing
+- Socket.IO real-time infrastructure
+- Structured logging and request correlation IDs
+- Prometheus-compatible application metrics
+- Docker-based production deployment
+- Automated CI, CodeQL, unit tests, and integration tests
 
-### 1. 🔐 Multi-Tenant Security & Isolation
-- **Schema-Level Isolation:** Database queries and mutations are strictly scoped by `organizationId`.
-- **Extended Tenant Repository:** `BaseTenantRepository<T>` and custom Prisma extensions automatically enforce soft-deletes (`deletedAt: null`) and compound tenant keys (`{ id, organizationId }`).
-- **AES-256-GCM Encryption:** Third-party OAuth tokens (Google Calendar, Microsoft Outlook) are encrypted at rest using AES-256-GCM prior to storage.
-- **Granular RBAC Engine:** Policy engine (`hasPermission`) evaluates static role entitlements and user-level custom permission overrides (e.g., `crm.manage_pipeline`, `document.delete`, `analytics.view`).
+## Multi-Tenant Security
 
-### 2. ⚡ Real-Time Collaboration & CRDT Editor
-- **Yjs CRDT Engine:** Concurrent document edits are merged using Yjs operational transformation state vectors rather than destructive raw string overwrites.
-- **ProseMirror / TipTap Editor:** Rich-text editor with live collaborator awareness cursors, user colors, and reconnection indicators.
-- **Socket.IO Room Isolation:** Real-time event broadcasts are isolated to tenant-scoped WebSocket rooms (`org_{organizationId}`).
+Every business resource is associated with an `organizationId`.
 
-### 3. 🧠 AI pgvector RAG & Semantic Search
-- **PostgreSQL pgvector Integration:** Document chunks and project notes are indexed into 1536-dimensional vector embeddings using HNSW / IVFFlat cosine distance indexing (`vector_cosine_ops`).
-- **Asynchronous Vector Worker:** Document uploading triggers background text chunking (1000-char windows) and embedding generation via BullMQ `aiEmbeddingQueue`.
-- **RAG Workspace Chat:** Natural language query interface (`/ai-chat`) returning synthesized answers with cited document source snippets and relevance match percentages.
-- **Native Full-Text Search:** Global command palette (`Cmd+K`) queries Projects, Tasks, CRM, and Documents using PostgreSQL `websearch_to_tsquery` and `to_tsvector`.
+The API restricts database operations to the authenticated user's organization. Cross-tenant resource access is rejected even when a valid resource identifier from another organization is supplied.
 
-### 4. 💳 Commercial Billing & Compliance Audit
-- **Stripe Webhook Signature Verification:** Webhook endpoints process raw request `Buffer` payloads with official HMAC signature verification (`stripe.webhooks.constructEvent`).
-- **Plan Entitlement Gatekeeper:** Middleware (`requireEntitlement`) inspects subscription status (`ACTIVE`, `PAST_DUE`, `CANCELED`) and quota limits (`maxUsers`, `maxProjects`, `maxStorageMb`, `maxAiRequestsPerMonth`).
-- **Immutable Security Audit Trail:** System activity logs capture user actions, IP addresses, and user-agent metadata with cursor pagination and asynchronous CSV/JSON export workers.
+Security-sensitive behavior is enforced by the backend rather than relying only on hidden frontend controls.
 
----
+The team invitation endpoint includes integration tests that verify:
 
-## 🛠️ Technology Stack
+- Administrators with `TEAM.MANAGE` can retrieve invitations
+- Managers without the permission receive `403 Forbidden`
+- Cross-organization access returns `404 Not Found`
+- Sensitive password data is not returned
 
-- **Backend:** Node.js 22, Express, TypeScript 5, Prisma ORM, BullMQ, ioredis, Winston, Zod
-- **Database & Storage:** PostgreSQL 15 (`pgvector`), Redis 7, AWS S3 / MinIO Object Storage
-- **Realtime & CRDT:** Socket.IO 4, Yjs, y-websocket, `@tiptap/react`
-- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Tremor, TanStack Query v5, Zustand, `@tanstack/react-virtual`
-- **DevOps:** Docker (Rootless Multi-Stage), GitHub Actions CI/CD, Prometheus Metrics, Trivy Security Scanner
+## Roles and Access
 
----
+| Capability | Super Admin | Admin | Manager | Employee |
+| --- | :---: | :---: | :---: | :---: |
+| Dashboard | Yes | Yes | Yes | Yes |
+| Projects and tasks | Yes | Yes | Yes | Yes |
+| Create projects | Yes | Yes | No | No |
+| Teams | Yes | Yes | Yes | Yes |
+| Manage teams | Yes | Yes | No | No |
+| CRM workspace | Yes | Yes | Yes | Yes |
+| Calendar and documents | Yes | Yes | Yes | Yes |
+| Analytics | Yes | Yes | Yes | No |
+| User management | Yes | Yes | No | No |
+| Organization settings | Yes | Yes | No | No |
+| Subscription settings | Yes | Yes | No | No |
+| Audit trail | Yes | No | No | No |
+| Background jobs | Yes | No | No | No |
 
-## 🚀 Quick Start (Local Development)
+## Technology Stack
+
+### Frontend
+
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS
+- TanStack Query
+- Zustand
+- React Router
+- Socket.IO Client
+- Vitest
+- React Testing Library
+
+### Backend
+
+- Node.js
+- Express
+- TypeScript
+- Prisma ORM
+- PostgreSQL
+- Redis
+- BullMQ
+- Socket.IO
+- Zod
+- Winston
+- Jest
+
+### DevOps and Security
+
+- GitHub Actions
+- CodeQL
+- Docker
+- Docker Compose
+- Nginx
+- Netlify
+- Render
+- Prometheus-compatible metrics
+- Prisma migrations
+- Dependency health checks
+
+## Architecture
+
+The project uses a modular-monolith backend architecture.
+
+Typical backend modules separate:
+
+- Routes
+- Request validation
+- Controllers
+- Services
+- Repositories
+- Unit and integration tests
+
+Application flow:
+
+1. The React application sends HTTPS requests to the Express API.
+2. Authentication is handled using access tokens and secure refresh cookies.
+3. Permission middleware verifies access before controller execution.
+4. Services implement business rules.
+5. Repositories execute tenant-scoped Prisma queries.
+6. PostgreSQL stores business data.
+7. Redis supports queues and real-time infrastructure.
+8. BullMQ workers process asynchronous jobs.
+
+## Repository Structure
+
+- `apps/api` - Express API, Prisma schema, services, workers, and tests
+- `apps/web` - React and Vite frontend
+- `.github/workflows` - CI and security workflows
+- `scripts` - maintenance, backup, and operational scripts
+- `docker-compose.yml` - local infrastructure
+- `docker-compose.production.yml` - production topology
+- `PRODUCTION.md` - deployment and recovery runbook
+- `SECURITY.md` - vulnerability disclosure policy
+
+## Local Development
 
 ### Prerequisites
-- Node.js 22+
-- Docker Engine & Docker Compose v2
+
+- Node.js 22 or newer
+- npm
 - Git
+- Docker Engine
+- Docker Compose v2
 
-### 1. Clone & Install
-```bash
-git clone https://github.com/akash4550/TeamSynch-AI.git
-cd TeamSynch-AI
-npm install
-```
+### Setup
 
-### 2. Start Infrastructure (PostgreSQL & Redis)
-```bash
-docker compose up -d postgres redis
-```
+1. Clone the repository:
 
-### 3. Database Setup & Local Sync
-```bash
-# Generate Prisma Client
-npm run generate
+   `git clone https://github.com/akash4550/TeamSynch-AI.git`
 
-# Apply Local Database Schema & Seed Initial Data
-npm run db:push -w apps/api
-npm run seed -w apps/api
-```
+2. Enter the project:
 
-### 4. Run Development Servers
-```bash
-npm run dev
-```
-- **Frontend Web App:** `http://localhost:5173`
-- **API Server:** `http://localhost:4000`
-- **Swagger Documentation:** `http://localhost:4000/api/v1/docs`
+   `cd TeamSynch-AI`
 
----
+3. Install dependencies:
 
-## 🧪 Testing & Code Quality
+   `npm install`
 
-```bash
-# Typecheck Entire Workspace (tsc --noEmit)
-npm run typecheck
+4. Copy the environment example:
 
-# Run Web Unit Tests (Vitest)
-npm run test -w apps/web
+   `cp .env.example .env`
 
-# Run API Unit Tests (Jest)
-npm run test -w apps/api
+5. Start PostgreSQL and Redis:
 
-# Execute Integration Tests Against Ephemeral Services
-npm run test:integration
-```
+   `docker compose up -d postgres redis`
 
----
+6. Generate the Prisma client:
 
-## 📦 Production Deployment
+   `npm run generate --workspace apps/api`
 
-Production deployments MUST run `npx prisma migrate deploy` rather than `db:push` to apply committed database schema migrations deterministically.
+7. Apply the local database schema:
 
-### 1. Build Production Container
-```bash
-cp .env.production.example .env.production
-docker compose -f docker-compose.production.yml up -d --build
-```
+   `npm run db:push --workspace apps/api`
 
-### 2. Health & Readiness Probes
-- **Liveness Probe:** `GET /api/v1/system/live`
-- **Readiness Probe:** `GET /api/v1/system/ready` (Validates live PostgreSQL & Redis pings)
-- **Metrics Endpoint:** `GET /api/v1/system/metrics` (Prometheus format)
+8. Seed demonstration data:
 
----
+   `npm run seed --workspace apps/api`
 
-## 📄 Documentation
-- [Product Vision & Roadmap](PRODUCT_VISION.md)
-- [Production Runbook](PRODUCTION.md)
-- [Architecture Decision Record (ADR-001)](ADR-001-Modular-Monolith.md)
-- [Security Policy](SECURITY.md)
+9. Start the development servers:
 
----
+   `npm run dev`
 
-## 📄 License
-This project is licensed under the [ISC License](LICENSE).
+Default development addresses:
+
+- Web application: `http://localhost:5173`
+- API service: `http://localhost:4000`
+
+The seed command resets demonstration data. Never run it against a production database.
+
+## Testing
+
+Frontend typecheck:
+
+`npm run typecheck --workspace apps/web`
+
+Backend typecheck:
+
+`npm run typecheck --workspace apps/api`
+
+Frontend tests:
+
+`npm test --workspace apps/web`
+
+Backend tests:
+
+`npm test --workspace apps/api -- --runInBand`
+
+Complete production build:
+
+`npm run build`
+
+## Current Verified Baseline
+
+The current main branch has passed:
+
+- Frontend TypeScript validation
+- Backend TypeScript validation
+- 18 frontend tests
+- 383 backend tests across 39 test suites
+- 3 team invitation security integration tests
+- Full production build
+- GitHub Actions CI
+- CodeQL analysis
+- Netlify deployment checks
+- Production API liveness and readiness checks
+- Production CORS preflight verification
+- Netlify SPA route verification
+
+## Recent Improvements
+
+- Corrected frontend API response handling
+- Added secure team invitation listing
+- Added tenant-isolation integration tests
+- Aligned navigation with backend permissions
+- Restricted administrative routes by role
+- Restricted project and team creation controls
+- Corrected organization API endpoints
+- Corrected error-page redirects
+- Removed a duplicate Axios client
+- Normalized empty CRM search parameters
+- Corrected user and pagination response handling
+- Corrected task, project, and team response handling
+
+## Production Deployment
+
+Production deployments must use committed Prisma migrations:
+
+`npx prisma migrate deploy`
+
+Do not use `prisma db push` as a production migration strategy.
+
+The production topology supports:
+
+- PostgreSQL
+- Redis
+- Migration service
+- API service
+- React web service
+- Nginx
+- Container health checks
+- Restart policies
+- Backup and recovery workflows
+
+See `PRODUCTION.md` for deployment, monitoring, backup, restoration, and rollback instructions.
+
+## Current Limitations
+
+This repository is a portfolio-quality SaaS implementation and demonstration environment rather than a commercially operated service.
+
+Current limitations include:
+
+- AI, email, OAuth, Stripe, and object-storage features require valid provider configuration.
+- Some team-detail controls still require complete frontend mutation workflows.
+- Background workers currently execute within the API process.
+- Production should use one API replica until workers are separated or leader election is implemented.
+- Demonstration data may be reset.
+- Public demo credentials are intentionally excluded from this README.
+
+## Security
+
+Never commit:
+
+- Environment files
+- Database passwords
+- JWT secrets
+- Stripe secrets
+- OAuth secrets
+- Storage credentials
+- Production tokens
+
+Do not report vulnerabilities through public GitHub issues. Follow the process in `SECURITY.md`.
+
+## Documentation
+
+- Production runbook: `PRODUCTION.md`
+- Product vision: `PRODUCT_VISION.md`
+- Architecture decision record: `ADR-001-Modular-Monolith.md`
+- Security policy: `SECURITY.md`
+
+## License
+
+Licensed under the ISC License. See `LICENSE`.
+
+## Author
+
+Akshay Lakwal
+
+GitHub: https://github.com/akash4550
