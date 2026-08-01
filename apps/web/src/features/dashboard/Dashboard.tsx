@@ -34,9 +34,17 @@ export const Dashboard = () => {
     },
   });
 
-  const projects = projectsData?.data || [];
-  const tasks = tasksData?.data || [];
-  const activities = activitiesData?.data || [];
+  const projects = Array.isArray(projectsData?.data?.projects)
+  ? projectsData.data.projects
+  : [];
+
+  const tasks = Array.isArray(tasksData?.data)
+  ? tasksData.data
+  : [];
+
+  const activities = Array.isArray(activitiesData?.data)
+  ? activitiesData.data
+  : [];
 
   const activeProjects = projects.filter((p: any) => p.status === 'ACTIVE' || p.status === 'PLANNING').length;
   const completedTasks = tasks.filter((t: any) => t.status === 'DONE').length;
