@@ -1,6 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../lib/api';
 
+const omitEmptySearch = <T extends { search?: string }>(
+  params?: T
+): T | undefined => {
+  if (!params) return undefined;
+
+  return {
+    ...params,
+    search: params.search?.trim() || undefined,
+  };
+};
+
 export interface Client {
   id: string;
   name: string;
@@ -79,7 +90,7 @@ export const useClients = (params?: { search?: string; status?: string; page?: n
   return useQuery({
     queryKey: ['crm', 'clients', params],
     queryFn: async () => {
-      const { data } = await api.get<{ data: Client[]; meta?: any }>('/crm/clients', { params });
+      const { data } = await api.get<{ data: Client[]; meta?: any }>('/crm/clients', { params: omitEmptySearch(params) });
       return data;
     },
   });
@@ -135,7 +146,7 @@ export const useContacts = (params?: { search?: string; clientId?: string; page?
   return useQuery({
     queryKey: ['crm', 'contacts', params],
     queryFn: async () => {
-      const { data } = await api.get<{ data: Contact[]; meta?: any }>('/crm/contacts', { params });
+      const { data } = await api.get<{ data: Contact[]; meta?: any }>('/crm/contacts', { params: omitEmptySearch(params) });
       return data;
     },
   });
@@ -166,7 +177,7 @@ export const useLeads = (params?: { search?: string; status?: string; page?: num
   return useQuery({
     queryKey: ['crm', 'leads', params],
     queryFn: async () => {
-      const { data } = await api.get<{ data: Lead[]; meta?: any }>('/crm/leads', { params });
+      const { data } = await api.get<{ data: Lead[]; meta?: any }>('/crm/leads', { params: omitEmptySearch(params) });
       return data;
     },
   });
@@ -208,7 +219,7 @@ export const useOpportunities = (params?: { search?: string; stageId?: string; p
   return useQuery({
     queryKey: ['crm', 'opportunities', params],
     queryFn: async () => {
-      const { data } = await api.get<{ data: Opportunity[]; meta?: any }>('/crm/opportunities', { params });
+      const { data } = await api.get<{ data: Opportunity[]; meta?: any }>('/crm/opportunities', { params: omitEmptySearch(params) });
       return data;
     },
   });

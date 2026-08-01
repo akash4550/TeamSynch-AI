@@ -4,6 +4,7 @@ import { api } from '../../lib/api';
 import { Search, Plus, Filter, LayoutGrid, List, X } from 'lucide-react';
 import { Card, CardBody } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { useAuth } from '../../providers/AuthProvider';
 
 // Utility for status colors
 const getStatusColor = (status: string) => {
@@ -28,6 +29,11 @@ export const ProjectsList = () => {
   const [key, setKey] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('PLANNING');
+  const { user } = useAuth();
+
+  const canCreateProject =
+    user?.role === 'SUPER_ADMIN' ||
+    user?.role === 'ADMIN';
 
   const queryClient = useQueryClient();
 
@@ -40,6 +46,10 @@ export const ProjectsList = () => {
       return res.data;
     },
   });
+
+  const projects = Array.isArray(data?.data?.projects)
+    ? data.data.projects
+    : [];
 
   const createProjectMutation = useMutation({
     mutationFn: async (payload: { name: string; key: string; description?: string; status?: string }) => {
@@ -75,10 +85,12 @@ export const ProjectsList = () => {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Projects</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">Manage your organization's projects.</p>
         </div>
-        <Button variant="primary" onClick={() => setIsModalOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Project
-        </Button>
+        {canCreateProject && (
+          <Button variant="primary" onClick={() => setIsModalOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Project
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 justify-between">
@@ -127,17 +139,21 @@ export const ProjectsList = () => {
 
       {isLoading ? (
         <div className="text-center py-12 text-gray-500">Loading projects...</div>
-      ) : !data?.data || data.data.length === 0 ? (
+      ) : projects.length === 0 ? (
         <Card className="text-center py-16">
           <CardBody>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No projects found</h3>
             <p className="text-gray-500 dark:text-gray-400 mb-6">Get started by creating your first project.</p>
-            <Button variant="primary" onClick={() => setIsModalOpen(true)}>Create Project</Button>
+            {canCreateProject && (
+              <Button variant="primary" onClick={() => setIsModalOpen(true)}>
+                Create Project
+              </Button>
+            )}
           </CardBody>
         </Card>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {data.data.map((project: any) => (
+          {projects.map((project: any) => (
             <Card key={project.id} className="hover:shadow-md transition-shadow cursor-pointer">
               <CardBody className="p-6">
                 <div className="flex justify-between items-start mb-4">
@@ -178,7 +194,7 @@ export const ProjectsList = () => {
               </tr>
             </thead>
             <tbody>
-              {data.data.map((project: any) => (
+              {projects.map((project: any) => (
                 <tr key={project.id} className="border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer">
                   <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{project.name}</td>
                   <td className="px-6 py-4">{project.key}</td>

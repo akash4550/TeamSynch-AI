@@ -7,14 +7,14 @@ export const OrganizationSettings = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['organization'],
     queryFn: async () => {
-      const res = await api.get('/organization');
+      const res = await api.get('/organizations');
       return res.data.data;
     },
   });
 
   const mutation = useMutation({
     mutationFn: async (updatedData: { name: string; slug: string }) => {
-      const res = await api.patch('/organization', updatedData);
+      const res = await api.patch('/organizations', updatedData);
       return res.data;
     },
     onSuccess: () => {
