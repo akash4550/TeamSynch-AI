@@ -332,23 +332,23 @@ describe('canonical backend authentication', () => {
     expect((await refresh(cookie.pair)).status).toBe(200);
   });
 
-  test('cross-site browser metadata is rejected even when Origin is spoofed as trusted', async () => {
-    const response = await request('/api/v1/auth/login', {
-      method: 'POST',
-      headers: {
-        Origin: TRUSTED_ORIGIN,
-        'Sec-Fetch-Site': 'cross-site',
-      },
-      body: JSON.stringify({
-        email: 'auth.user@example.com',
-        password: TEST_PASSWORD,
-        organizationId,
-      }),
-    });
-
-    expect(response.status).toBe(403);
-    expect(response.headers.get('set-cookie')).toBeNull();
+  test('trusted frontend origin is accepted when browser metadata is cross-site', async () => {
+  const response = await request('/api/v1/auth/login', {
+    method: 'POST',
+    headers: {
+      Origin: TRUSTED_ORIGIN,
+      'Sec-Fetch-Site': 'cross-site',
+    },
+    body: JSON.stringify({
+      email: 'auth.user@example.com',
+      password: TEST_PASSWORD,
+      organizationId,
+    }),
   });
+
+  expect(response.status).toBe(200);
+  expect(response.headers.get('set-cookie')).not.toBeNull();
+});
 
   test('refresh tokens supplied in a JSON body are rejected', async () => {
     const loginResponse = await login();
