@@ -390,6 +390,26 @@ export class TeamController {
 
 
 
+  getInvitations = asyncWrapper(
+    async (
+      req: Request,
+      res: Response
+    ) => {
+      const id = String(req.params.id);
+
+      const invitations =
+        await this.service.getInvitations(
+          req.user!.organizationId,
+          id
+        );
+
+      res.status(200).json({
+        success: true,
+        data: invitations,
+      });
+    }
+  );
+
   inviteMember = asyncWrapper(
 
     async (

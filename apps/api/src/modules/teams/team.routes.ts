@@ -195,6 +195,13 @@ router.delete(
 // Invitations
 
 
+router.get(
+  '/:id/invitations',
+  requirePermission(PERMISSIONS.TEAM.MANAGE),
+  validateRequest(getTeamSchema),
+  controller.getInvitations
+);
+
 router.post(
 
   '/:id/invitations',

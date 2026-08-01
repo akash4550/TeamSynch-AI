@@ -6,16 +6,22 @@ import { useUiStore } from '../store/uiStore';
 import { AIAssistantPanel } from '../features/ai/AIAssistantPanel';
 import { BillingAlertBanner } from '../modules/billing/components/BillingAlertBanner';
 import { Bot } from 'lucide-react';
+import { useAuth } from '../providers/AuthProvider';
 
 export const DashboardLayout = () => {
   useUiStore((state) => state.theme); 
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
+  const { user } = useAuth();
+
+  const canManageBilling =
+    user?.role === 'SUPER_ADMIN' ||
+    user?.role === 'ADMIN';
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-slate-900 overflow-hidden transition-colors">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <BillingAlertBanner />
+        {canManageBilling && <BillingAlertBanner />}
         <Topbar />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative">
           <Outlet />

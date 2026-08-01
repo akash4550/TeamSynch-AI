@@ -11,7 +11,7 @@ export const ForbiddenError = () => {
         <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md mx-auto">
           You don't have the necessary permissions to access this page. Please contact your organization administrator if you believe this is a mistake.
         </p>
-        <Link to="/">
+        <Link to="/dashboard">
           <Button variant="primary">Return to Dashboard</Button>
         </Link>
       </div>
@@ -28,7 +28,7 @@ export const NotFoundError = () => {
         <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md mx-auto">
           The page you are looking for doesn't exist or has been moved.
         </p>
-        <Link to="/">
+        <Link to="/dashboard">
           <Button variant="primary">Return to Dashboard</Button>
         </Link>
       </div>

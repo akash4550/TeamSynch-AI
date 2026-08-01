@@ -5,6 +5,7 @@ import { Search, Plus, X } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { TeamCard } from './components/TeamCard';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../providers/AuthProvider';
 
 export const TeamsPage = () => {
   const [search, setSearch] = useState('');
@@ -14,6 +15,11 @@ export const TeamsPage = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState('#3B82F6');
+  const { user } = useAuth();
+
+  const canManageTeams =
+    user?.role === 'SUPER_ADMIN' ||
+    user?.role === 'ADMIN';
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -27,6 +33,10 @@ export const TeamsPage = () => {
       return res.data;
     },
   });
+
+  const teams = Array.isArray(data?.data?.teams)
+    ? data.data.teams
+    : [];
 
   const createTeamMutation = useMutation({
     mutationFn: async (payload: { name: string; description?: string; color?: string }) => {
@@ -59,10 +69,12 @@ export const TeamsPage = () => {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Teams</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">Manage your organization's teams and members.</p>
         </div>
-        <Button variant="primary" onClick={() => setIsModalOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Create Team
-        </Button>
+        {canManageTeams && (
+          <Button variant="primary" onClick={() => setIsModalOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Create Team
+          </Button>
+        )}
       </div>
 
       <div className="flex gap-4">
@@ -80,15 +92,19 @@ export const TeamsPage = () => {
 
       {isLoading ? (
         <div className="text-center py-12 text-gray-500">Loading teams...</div>
-      ) : !data?.data || data.data.length === 0 ? (
+      ) : teams.length === 0 ? (
         <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-lg border border-dashed border-gray-300 dark:border-slate-700">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No teams found</h3>
           <p className="text-gray-500 dark:text-gray-400 mb-6">Create a team to start collaborating.</p>
-          <Button variant="primary" onClick={() => setIsModalOpen(true)}>Create Team</Button>
+          {canManageTeams && (
+            <Button variant="primary" onClick={() => setIsModalOpen(true)}>
+              Create Team
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {data.data.map((team: any) => (
+          {teams.map((team: any) => (
             <TeamCard 
               key={team.id} 
               team={team} 

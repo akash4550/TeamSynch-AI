@@ -84,21 +84,41 @@ function App() {
                       <Route path="/crm/leads" element={<LeadsPage />} />
                       <Route path="/crm/opportunities" element={<OpportunitiesPage />} />
                       <Route path="/crm/pipeline" element={<PipelineBoard />} />
-                      <Route path="/analytics" element={<AnalyticsLayout />} />
+                      <Route
+                        element={
+                          <ProtectedRoute
+                            allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']}
+                          />
+                        }
+                      >
+                        <Route path="/analytics" element={<AnalyticsLayout />} />
+                      </Route>
                       <Route path="/search" element={<SearchResultsPage />} />
 
                       {/* Protected Role-Based Admin Routes */}
-                      <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'MANAGER']} />}>
+                      <Route
+                        element={
+                          <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']} />
+                        }
+                      >
                         <Route path="/users" element={<UserManagement />} />
                         <Route path="/organization" element={<OrganizationSettings />} />
                       </Route>
 
-                      <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']} />}>
+                      <Route
+                        element={
+                          <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']} />
+                        }
+                      >
                         <Route path="/settings" element={<SubscriptionSettingsPage />} />
-                        <Route path="/audit" element={<AuditLogViewerPage />} />
                       </Route>
 
-                      <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} />}>
+                      <Route
+                        element={
+                          <ProtectedRoute allowedRoles={['SUPER_ADMIN']} />
+                        }
+                      >
+                        <Route path="/audit" element={<AuditLogViewerPage />} />
                         <Route path="/system/jobs" element={<JobsDashboard />} />
                       </Route>
                     </Route>

@@ -571,6 +571,31 @@ export class TeamRepository {
 
 
 
+  async getInvitations(
+    organizationId: string,
+    teamId: string
+  ) {
+    return prisma.teamInvitation.findMany({
+      where: {
+        organizationId,
+        teamId,
+      },
+      include: {
+        invitedBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatar: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
   async createInvitation(
     organizationId:string,
     teamId:string,

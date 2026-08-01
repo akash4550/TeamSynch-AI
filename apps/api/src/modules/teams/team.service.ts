@@ -408,6 +408,21 @@ export class TeamService {
 
 
 
+  async getInvitations(
+    organizationId: string,
+    teamId: string
+  ) {
+    await this.getTeamById(
+      organizationId,
+      teamId
+    );
+
+    return this.repository.getInvitations(
+      organizationId,
+      teamId
+    );
+  }
+
   async inviteMember(
     organizationId:string,
     teamId:string,

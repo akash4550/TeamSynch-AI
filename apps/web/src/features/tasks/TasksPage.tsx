@@ -38,7 +38,9 @@ export const TasksPage = () => {
     },
   });
 
-  const projects = projectsData || [];
+  const projects = Array.isArray(projectsData?.projects)
+    ? projectsData.projects
+    : [];
 
   const createTaskMutation = useMutation({
     mutationFn: async (payload: {

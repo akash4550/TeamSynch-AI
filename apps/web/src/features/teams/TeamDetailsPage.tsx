@@ -4,10 +4,16 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { Users, Mail, Settings, Plus } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
+import { useAuth } from '../../providers/AuthProvider';
 
 export const TeamDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState<'members' | 'invitations' | 'settings'>('members');
+  const { user } = useAuth();
+
+  const canManageTeams =
+    user?.role === 'SUPER_ADMIN' ||
+    user?.role === 'ADMIN';
 
   const { data: teamData, isLoading: teamLoading } = useQuery({
     queryKey: ['team', id],
@@ -31,6 +37,7 @@ export const TeamDetailsPage = () => {
       const res = await api.get(`/teams/${id}/invitations`);
       return res.data.data;
     },
+    enabled: Boolean(id) && canManageTeams,
   });
 
   if (teamLoading) return <div>Loading...</div>;
@@ -51,10 +58,12 @@ export const TeamDetailsPage = () => {
               <p className="text-gray-500 text-sm mt-1">{teamData?.description || 'No description'}</p>
             </div>
         </div>
-        <Button variant="primary">
+        {canManageTeams && (
+          <Button variant="primary">
             <Plus className="w-4 h-4 mr-2" />
             Invite Member
-        </Button>
+          </Button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -71,28 +80,32 @@ export const TeamDetailsPage = () => {
             <Users className="w-4 h-4" />
             Members ({membersData?.length || 0})
           </button>
-          <button
-            onClick={() => setActiveTab('invitations')}
-            className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2
-              ${activeTab === 'invitations'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
-          >
-            <Mail className="w-4 h-4" />
-            Invitations ({invitationsData?.length || 0})
-          </button>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2
-              ${activeTab === 'settings'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
-          >
-            <Settings className="w-4 h-4" />
-            Settings
-          </button>
+          {canManageTeams && (
+            <button
+              onClick={() => setActiveTab('invitations')}
+              className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2
+                ${activeTab === 'invitations'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+            >
+              <Mail className="w-4 h-4" />
+              Invitations ({invitationsData?.length || 0})
+            </button>
+          )}
+          {canManageTeams && (
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2
+                ${activeTab === 'settings'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+            >
+              <Settings className="w-4 h-4" />
+              Settings
+            </button>
+          )}
         </nav>
       </div>
 
@@ -129,7 +142,11 @@ export const TeamDetailsPage = () => {
                     </td>
                     <td className="px-6 py-4">{new Date(membership.joinedAt).toLocaleDateString()}</td>
                     <td className="px-6 py-4">
-                        <Button variant="outline" size="sm" className="text-xs">Edit Role</Button>
+                        {canManageTeams && (
+                          <Button variant="outline" size="sm" className="text-xs">
+                            Edit Role
+                          </Button>
+                        )}
                     </td>
                   </tr>
                 ))}
@@ -137,7 +154,7 @@ export const TeamDetailsPage = () => {
             </table>
         )}
 
-        {activeTab === 'invitations' && (
+        {activeTab === 'invitations' && canManageTeams && (
              <table className="w-full text-sm text-left">
              <thead className="bg-gray-50 dark:bg-slate-900 text-gray-500 dark:text-gray-400">
                <tr>
@@ -168,7 +185,7 @@ export const TeamDetailsPage = () => {
            </table>
         )}
 
-        {activeTab === 'settings' && (
+        {activeTab === 'settings' && canManageTeams && (
             <div className="p-6">
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Danger Zone</h3>
                 <div className="p-4 border border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900/50 rounded-md">

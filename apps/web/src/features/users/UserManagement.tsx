@@ -28,6 +28,12 @@ export const UserManagement = () => {
     },
   });
 
+  const users = Array.isArray(data?.data?.users)
+    ? data.data.users
+    : [];
+
+  const pagination = data?.data?.pagination;
+
   const createUserMutation = useMutation({
     mutationFn: async (payload: {
       firstName: string;
@@ -115,10 +121,10 @@ export const UserManagement = () => {
           <tbody>
             {isLoading ? (
               <tr><td colSpan={4} className="px-6 py-4 text-center">Loading users...</td></tr>
-            ) : !data?.data || data.data.length === 0 ? (
+            ) : users.length === 0 ? (
               <tr><td colSpan={4} className="px-6 py-4 text-center">No users found.</td></tr>
             ) : (
-              data.data.map((user: any) => (
+              users.map((user: any) => (
                 <tr key={user.id} className="bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50">
                   <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{user.firstName} {user.lastName}</td>
                   <td className="px-6 py-4">{user.email}</td>
@@ -145,10 +151,10 @@ export const UserManagement = () => {
         </table>
       </div>
 
-      {data?.meta && (
+      {pagination && (
         <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-200 dark:border-slate-700">
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            Showing page {data.meta.page} of {data.meta.totalPages || 1}
+            Showing page {pagination.page} of {pagination.totalPages || 1}
           </span>
           <div className="flex gap-2">
             <button
@@ -160,7 +166,7 @@ export const UserManagement = () => {
             </button>
             <button
               onClick={() => setPage(p => p + 1)}
-              disabled={page >= (data.meta.totalPages || 1)}
+              disabled={page >= (pagination.totalPages || 1)}
               className="px-3 py-1 border border-gray-300 dark:border-slate-700 rounded-md text-sm hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 disabled:opacity-50"
             >
               Next
