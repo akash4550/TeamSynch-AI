@@ -9,7 +9,7 @@ export const REFRESH_COOKIE_PATH = '/api/v1/auth';
 const refreshCookieOptions: CookieOptions = {
   httpOnly: true,
   secure: env.NODE_ENV === 'production',
-  sameSite: 'strict',
+sameSite: env.NODE_ENV === 'production' ? 'none' : 'strict',
   path: REFRESH_COOKIE_PATH,
 };
 

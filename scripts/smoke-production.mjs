@@ -187,7 +187,7 @@ async function assertAuthenticationBoundary() {
     throw new Error('Login did not return the browser-safe token contract');
   }
   const loginCookie = cookieFrom(login.response);
-  for (const attribute of ['HttpOnly', 'Secure', 'SameSite=Strict', 'Path=/api/v1/auth']) {
+  for (const attribute of ['HttpOnly', 'Secure', 'SameSite=None', 'Path=/api/v1/auth']) {
     if (!loginCookie.header.includes(attribute)) {
       throw new Error(`Refresh cookie is missing ${attribute}`);
     }
