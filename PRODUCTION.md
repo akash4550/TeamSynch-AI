@@ -184,6 +184,44 @@ docker compose \
 
 The migration logs must show that all migrations were applied or that no pending migrations exist.
 
+### 6.1 Create the first administrator
+
+The production seed command is destructive and refuses to run in production. Use the guarded
+bootstrap utility once after migrations complete. Run it from a trusted administrator workstation
+with the repository dependencies installed.
+
+Set these values only in the current shell:
+
+- `DATABASE_URL`: the production PostgreSQL connection URL
+- `BOOTSTRAP_ADMIN_EMAIL`: the first administrator's email address
+- `BOOTSTRAP_ADMIN_PASSWORD`: a unique password of at least 14 characters, with no leading or trailing whitespace
+- `BOOTSTRAP_CONFIRM=CREATE_FIRST_ADMIN`
+
+Optional identity values are `BOOTSTRAP_ADMIN_FIRST_NAME`, `BOOTSTRAP_ADMIN_LAST_NAME`,
+`BOOTSTRAP_ORGANIZATION_NAME`, and `BOOTSTRAP_ORGANIZATION_SLUG`.
+
+Run:
+
+```bash
+npm run admin:bootstrap-production
+```
+
+The utility creates one organization and one `SUPER_ADMIN` in a transaction. It refuses to run
+when any organization or user already exists. Record the printed workspace ID, then immediately
+clear the database URL and password from the shell and clipboard.
+
+To reset that administrator later, set `DATABASE_URL`, `BOOTSTRAP_ORGANIZATION_ID`,
+`BOOTSTRAP_ADMIN_EMAIL`, a new `BOOTSTRAP_ADMIN_PASSWORD`, and
+`BOOTSTRAP_CONFIRM=RESET_PRODUCTION_ADMIN_PASSWORD`, then run:
+
+```bash
+npm run admin:reset-production-password
+```
+
+The reset utility targets only an active `SUPER_ADMIN`, clears login lockout state, and revokes all
+existing refresh sessions. Neither utility prints the password or database URL. Never store these
+values in a tracked environment file or pass the password as a command-line argument.
+
 ## 7. Post-Deployment Verification
 
 Load the environment values into the current shell:
