@@ -31,7 +31,9 @@ describe('LocalStorageProvider', () => {
     );
 
     expect(result.key).toMatch(/^org_123\/doc_456\/[0-9a-f-]+\.pdf$/);
-    expect(result.url).toBe(`/uploads/${result.key}`);
+    // Bug #64: URLs resolve through /api/v1/uploads (served, HMAC-gated) —
+    // the old bare '/uploads/...' prefix resolved nowhere at all.
+    expect(result.url).toBe(`/api/v1/uploads/${result.key}`);
     expect(fs.readFileSync(path.join(temporaryDirectory, 'uploads', ...result.key.split('/')), 'utf8'))
       .toBe('test');
   });
@@ -68,5 +70,34 @@ describe('LocalStorageProvider', () => {
 
     await expect(provider.deleteFile('../protected.txt')).resolves.toBe(false);
     expect(fs.readFileSync(protectedFile, 'utf8')).toBe('keep');
+  });
+
+  /*
+   * Bug #60 contract: download URLs are HMAC-SHA256 signed (not the old
+   * reversible base64 pseudo-signature) and verify via verifySignedDownloadUrl.
+   */
+  it('signs download URLs that verify round-trip and reject forgery', async () => {
+    const url = await provider.getSignedDownloadUrl('org_123/exports/audit.csv', 3600);
+    const parsed = new URL(url, 'http://localhost');
+    const expires = parsed.searchParams.get('expires')!;
+    const sig = parsed.searchParams.get('sig')!;
+
+    // Absolute epoch-ms expiry, 43-char base64url HMAC — and crucially the
+    // legacy forgery channel is gone: base64-DECODING the sig must not
+    // reveal the key scheme.
+    expect(Number(expires)).toBeGreaterThan(Date.now());
+    expect(sig).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(Buffer.from(sig, 'base64url').toString()).not.toContain('org_123');
+
+    expect(provider.verifySignedDownloadUrl('org_123/exports/audit.csv', expires, sig)).toBe(true);
+    // Tampered key: same sig must not authorize any other key.
+    expect(provider.verifySignedDownloadUrl('org_999/other/file.pdf', expires, sig)).toBe(false);
+    // Tampered (extended) expiry: payload differs, sig mismatch.
+    expect(provider.verifySignedDownloadUrl('org_123/exports/audit.csv', Number(expires) + 3_600_000, sig)).toBe(false);
+    // Legacy base64 pseudo-signature of the old `key:expiry` scheme is rejected.
+    const legacyForgery = Buffer.from(`org_123/exports/audit.csv:${expires}`).toString('base64url');
+    expect(provider.verifySignedDownloadUrl('org_123/exports/audit.csv', expires, legacyForgery)).toBe(false);
+    // Already-expired deadline is rejected.
+    expect(provider.verifySignedDownloadUrl('org_123/exports/audit.csv', Date.now() - 1, sig)).toBe(false);
   });
 });

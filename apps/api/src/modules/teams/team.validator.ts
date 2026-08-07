@@ -203,6 +203,8 @@ export const listTeamsSchema = z.object({
 
 
 
+export type ListTeamsRequest = z.infer<typeof listTeamsSchema>;
+
 export const inviteMemberSchema = z.object({
 
   params: z.object({
@@ -255,4 +257,34 @@ export const updateMembershipSchema = z.object({
 
   }),
 
+});
+
+/*
+ * FEATURE (ledger #1 — invitation accept lifecycle): the two PUBLIC
+ * token-carrying routes. The token is an HMAC-signed credential (see
+ * core/utils/inviteToken.ts), validated structurally here and
+ * cryptographically in the service. The accept body fields are optional
+ * at the door because they are ONLY required when the invited email has
+ * no account yet (existing users accept password-lessly) — the service
+ * enforces them when it knows which case applies.
+ */
+export const inspectInvitationSchema = z.object({
+  params: z.object({
+    token: z.string().min(10, 'Invalid invitation token').max(500),
+  }).strict(),
+});
+
+export const acceptInvitationSchema = z.object({
+  params: z.object({
+    token: z.string().min(10, 'Invalid invitation token').max(500),
+  }).strict(),
+  body: z.object({
+    firstName: z.string().trim().min(1, 'First name is required').max(50).optional(),
+    lastName: z.string().trim().min(1, 'Last name is required').max(50).optional(),
+    password: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .max(72, 'Password cannot exceed 72 characters')
+      .optional(),
+  }).strict(),
 });

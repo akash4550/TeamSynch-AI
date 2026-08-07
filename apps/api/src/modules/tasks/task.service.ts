@@ -150,7 +150,31 @@ export class TaskService {
     return task;
   }
 
-  async archiveTask(organizationId: string, taskId: string) {
+  /*
+   * BUG FIX (#99, 2026-08-06 — task lifecycle half-invisible and
+   * misattributed in the audit trail): this module's update/move/assign
+   * events were emitted with `actorId || task.reporterId`, but the
+   * controller never supplied an actorId, so EVERY update/move/assign
+   * audit row named the task's REPORTER — a compliance-trail fabrication
+   * whenever an admin/manager touched a colleague's task. The same
+   * misattribution also reached RealtimeService's self-assign guard
+   * (`assigneeId !== actorId`): a manager assigning the reporter's own
+   * task back to them compared reporter-to-reporter and the assignment
+   * notification was silently swallowed. Worse, archive/restore and the
+   * controller's delete call carried no actor at all: archive/restore
+   * emitted NOTHING (zero audit rows — the exact #84 defect class) and
+   * deletes were attributed to 'system' (userId dropped). The controller
+   * now passes req.user!.id on every mutation (project.controller's #84
+   * pattern), and archive/restore emit TaskUpdated after persistence —
+   * which also fixes their realtime gap: teammates' boards kept showing
+   * archived cards (and hid restored ones) until a manual refresh, since
+   * `task.updated` is the signal web clients already invalidate on.
+   */
+  async archiveTask(
+    organizationId: string,
+    taskId: string,
+    actorId?: string
+  ) {
     const task = await this.repository.update(
       organizationId,
       taskId,
@@ -163,10 +187,23 @@ export class TaskService {
       throw new AppError('Task not found', 404);
     }
 
+    // Identifiable audit metadata: changed-field NAME only (#84 precedent:
+    // archive/restore surface as UPDATEs carrying the lifecycle flag).
+    eventBus.emitEvent('TaskUpdated', {
+      organizationId,
+      taskId: task.id,
+      actorId: actorId || task.reporterId,
+      changes: { archived: true },
+    });
+
     return task;
   }
 
-  async restoreTask(organizationId: string, taskId: string) {
+  async restoreTask(
+    organizationId: string,
+    taskId: string,
+    actorId?: string
+  ) {
     const task = await this.repository.update(
       organizationId,
       taskId,
@@ -178,6 +215,13 @@ export class TaskService {
     if (!task) {
       throw new AppError('Task not found', 404);
     }
+
+    eventBus.emitEvent('TaskUpdated', {
+      organizationId,
+      taskId: task.id,
+      actorId: actorId || task.reporterId,
+      changes: { archived: false },
+    });
 
     return task;
   }

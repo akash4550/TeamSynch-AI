@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 
 import { ProjectService } from './project.service';
+import { getValidatedRequest } from '../../core/middlewares/validateRequest';
+import type { ProjectListRequest } from './project.validator';
 
 import { asyncWrapper } from '../../core/utils/asyncWrapper';
 
@@ -34,12 +36,23 @@ export class ProjectController {
     )=>{
 
 
+      /*
+       * BUG FIX (#113, 2026-08-06): read the VALIDATED, coerced query —
+       * never raw req.query again (the route now runs
+       * validateRequest(projectListSchema); getValidatedRequest answers
+       * 500-by-design if that wiring is ever removed, so the bypass
+       * cannot silently return). The `{ success, data }` response
+       * contract is unchanged.
+       */
+      const { query } =
+        getValidatedRequest<ProjectListRequest>(req);
+
       const projects =
         await this.service.getProjects(
 
           req.user!.organizationId,
 
-          req.query
+          query
 
         );
 
@@ -159,7 +172,10 @@ export class ProjectController {
 
           id,
 
-          req.body
+          req.body,
+
+          /* Bug #84: actor for the audit-trail ProjectUpdated event */
+          req.user!.id
 
         );
 
@@ -198,7 +214,10 @@ export class ProjectController {
 
           req.user!.organizationId,
 
-          id
+          id,
+
+          /* Bug #84: actor for the audit-trail ProjectUpdated event */
+          req.user!.id
 
         );
 
@@ -237,7 +256,10 @@ export class ProjectController {
 
           req.user!.organizationId,
 
-          id
+          id,
+
+          /* Bug #84: actor for the audit-trail ProjectUpdated event */
+          req.user!.id
 
         );
 
@@ -275,7 +297,10 @@ export class ProjectController {
 
         req.user!.organizationId,
 
-        id
+        id,
+
+        /* Bug #84: actor for the audit-trail ProjectDeleted event */
+        req.user!.id
 
       );
 

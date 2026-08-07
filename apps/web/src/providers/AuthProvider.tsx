@@ -34,9 +34,20 @@ interface AuthContextValue {
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
   clearSession: () => void;
+  /*
+   * BUG FIX (#75): exposed so SocketProvider can trigger the same deduped
+   * session refresh the axios 401 interceptor uses when the realtime
+   * handshake is rejected for an expired access token (see SocketProvider).
+   * The runtime value below already provided this — the interface simply
+   * makes it part of the public contract.
+   */
+  refreshSession: () => Promise<string>;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+// Exported (ledger #3) so embeddable widgets can OPTIONALLY read auth
+// state without the throwing useAuth guard (they must also render
+// provider-less in lightweight harnesses).
+export const AuthContext = createContext<AuthContextValue | null>(null);
 const obsoleteAuthStorageKeys = ['mock_admin_id', 'aiworkspace_token'];
 
 const removeObsoleteAuthStorage = (): void => {
@@ -151,7 +162,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     login,
     logout,
     clearSession,
-  }), [accessToken, clearSession, login, logout, session, status]);
+    refreshSession, // BUG FIX (#75): see interface note above
+  }), [accessToken, clearSession, login, logout, refreshSession, session, status]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

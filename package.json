@@ -5,7 +5,7 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspaces --if-present",
+    "dev": "node scripts/dev.mjs",
     "generate": "npm run generate --workspace=api",
     "db:push": "npm run db:push --workspace=api",
     "seed": "npm run seed --workspace=api",

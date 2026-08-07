@@ -20,12 +20,95 @@ export class AIService {
     this.provider = provider;
   }
 
-  /**
-   * Generates a 1536-dimensional float vector embedding for pgvector storage
+  /*
+   * FEATURE (ledger #9 — 2026-08-05): real embeddings. The previous body
+   * returned `Array.from({length: 1536}, (_, i) => Math.sin(seed + i) * 0.05)`
+   * — deterministic pseudo-vectors whose "similarity" was a hash collision
+   * pattern, so every RAG citation was scored against noise. Embeddings now
+   * come from the provider's real endpoint (OpenAI text-embedding-3-small by
+   * default); the mock provider fails CLOSED (503) rather than fabricate
+   * floats. Usage is logged under caller-supplied features:
+   *   - 'rag_ingest'   (document chunks — billed to the org's monthly RAG
+   *                    budget, AI_RAG_MONTHLY_TOKEN_BUDGET) and
+   *   - 'rag_query'    (similarity search per question),
+   * each attributed to the supplied acting user (document uploader / asking
+   * user) because AIUsageLog.userId is NOT NULL.
    */
-  async generateEmbedding(text: string): Promise<number[]> {
-    const seed = text.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return Array.from({ length: 1536 }, (_, i) => Math.sin(seed + i) * 0.05);
+  // Returns the real billed token count alongside the vector — callers
+  // (RAG ingestion budget) must never estimate cost from text length.
+  async generateEmbedding(text: string, ctx?: {
+    organizationId: string;
+    userId: string;
+    feature: string;
+  }): Promise<{ embedding: number[]; totalTokens: number }> {
+    const startedAt = Date.now();
+    const provider = this.resolveProvider();
+
+    try {
+      const response = await this.provider.generateEmbedding(text);
+
+      // Budget accounting rides AIUsageLog; a logging failure must never
+      // break ingestion/search (best-effort, same posture as a dropped
+      // metric, but it IS logged so budget drift is discoverable).
+      if (ctx) {
+        await prisma.aIUsageLog
+          .create({
+            data: {
+              organizationId: ctx.organizationId,
+              userId: ctx.userId,
+              feature: ctx.feature,
+              provider,
+              model: response.model,
+              promptTokens: response.usage.totalTokens,
+              completionTokens: 0,
+              totalTokens: response.usage.totalTokens,
+              latencyMs: Date.now() - startedAt,
+              success: true,
+            },
+          })
+          .catch((logError: unknown) => {
+            console.warn(
+              `[AIService] Embedding usage log failed (budget drift risk): ${
+                logError instanceof Error ? logError.message : String(logError)
+              }`,
+            );
+          });
+      }
+
+      return { embedding: response.embedding, totalTokens: response.usage.totalTokens };
+    } catch (error: unknown) {
+      const safeError =
+        error instanceof AIProviderError
+          ? error
+          : new AIProviderError('AI embedding request failed', {
+              provider: this.provider.name,
+              model: 'unknown',
+              statusCode: 502,
+            });
+
+      if (ctx) {
+        await prisma.aIUsageLog
+          .create({
+            data: {
+              organizationId: ctx.organizationId,
+              userId: ctx.userId,
+              feature: ctx.feature,
+              provider,
+              model: safeError.model,
+              requestId: safeError.requestId,
+              promptTokens: 0,
+              completionTokens: 0,
+              totalTokens: 0,
+              latencyMs: Date.now() - startedAt,
+              success: false,
+              errorMessage: safeError.message,
+            },
+          })
+          .catch(() => undefined);
+      }
+
+      throw safeError;
+    }
   }
 
   async generateCompletion(

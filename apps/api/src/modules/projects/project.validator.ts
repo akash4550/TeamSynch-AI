@@ -89,7 +89,10 @@ export const projectListSchema = z.object({
   params: emptyObjectSchema,
   query: z.object({
     page: z.coerce.number().int().positive().default(1),
-    limit: z.coerce.number().int().positive().max(100).default(20),
+    // FEATURE (ledger #6, 2026-08-05 — aggregate exception list @500):
+    // aggregate/dropdown-consumed list raised from 100 (browse lists keep
+    // 100); the UI declares truncation when total exceeds the fetched set.
+    limit: z.coerce.number().int().positive().max(500).default(20),
     search: z.string().optional(),
     status: z.nativeEnum(ProjectStatus).optional(),
     ownerId: uuidSchema.optional(),

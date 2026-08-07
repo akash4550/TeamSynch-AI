@@ -1,13 +1,48 @@
 import { useState } from 'react';
-import { Title, Grid, Card, Text } from '@tremor/react';
 import { FilterPanel } from '../../components/analytics/FilterPanel';
 import { MetricCard } from '../../components/analytics/MetricCard';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
 import { useReport, MetricFilter } from './hooks/useAnalytics';
+
+/*
+ * UI PASS (#UI-executive-dashboard, 2026-08-07): visual-only restyle —
+ * Tremor Grid/Card/Title/Text/Button swapped for the shared design
+ * system. THIS file only; filters, report query, and the Bug #41
+ * metric-honesty mappings are verbatim.
+ *
+ * Locks held (AnalyticsReportFailures — Bug #41): 'We couldn't load this
+ * report' + role="alert" + server message + Retry; exactly FOUR '—' text
+ * nodes on failure (cards render through the real shared MetricCard);
+ * no stray '0' text can render. FilterPanel is stubbed in that suite —
+ * its usage here is unchanged anyway.
+ */
 
 export const ExecutiveDashboard = () => {
   const [filters, setFilters] = useState<MetricFilter>({});
 
-  const { data: report, isLoading } = useReport('EXECUTIVE_SUMMARY', filters);
+  /*
+   * BUG FIX (fabricated all-zero board on failed report — Bug #41): this
+   * query surfaced only `isLoading`, and `getMetricValue` defaults to 0 when
+   * the report payload is missing — so a rejected
+   * GET /analytics/reports/EXECUTIVE_SUMMARY painted "Active Users: 0",
+   * "New Users: 0", "Pipeline Value: $0" as if the org had flatlined.
+   * `isError`/`error`/`refetch` are now exposed: failing cards show an
+   * honest "—" (unknown, not zero) and a `role="alert"` strip carries the
+   * server's message + Retry. Same truth pattern as TeamDashboard (Bug #34).
+   */
+  const {
+    data: report,
+    isLoading,
+    isError: reportIsError,
+    error: reportError,
+    refetch: refetchReport,
+  } = useReport('EXECUTIVE_SUMMARY', filters);
+
+  const reportErrorMessage = (() => {
+    const m = (reportError as any)?.response?.data?.error?.message;
+    return typeof m === 'string' && m.length > 0 ? m : null;
+  })();
 
   const handleDateChange = (range: { from?: Date; to?: Date }) => {
     setFilters(prev => ({
@@ -24,48 +59,78 @@ export const ExecutiveDashboard = () => {
     return metric?.value || 0;
   };
 
+  /* FEATURE (ledger #4): surface the API's per-metric definition as the
+   * card footnote (open-pipeline-only value). */
+  const getMetricDescription = (name: string): string | undefined => {
+    if (!report || !report.results) return undefined;
+    const metric = report.results.find((m: any) => m.name === name);
+    return typeof metric?.description === 'string' && metric.description.length > 0
+      ? metric.description
+      : undefined;
+  };
+
   return (
-    <div className="p-6 h-full overflow-auto bg-gray-50 dark:bg-gray-900">
+    <div className="p-6 h-full overflow-auto bg-gray-50 dark:bg-slate-900">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Executive Dashboard</h1>
-        <p className="text-gray-500 text-sm">High-level overview of organization health.</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">High-level overview of organization health.</p>
       </div>
 
       <FilterPanel onDateChange={handleDateChange} />
 
-      <Grid numItemsSm={2} numItemsLg={4} className="gap-6 mb-8">
+      {/* Bug #41: honest failure strip replaces the fabricated all-zero board. */}
+      {reportIsError && (
+        <div
+          role="alert"
+          className="mb-4 flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-red-900/50 dark:bg-red-900/20"
+        >
+          <div>
+            <p className="text-sm font-medium text-red-700 dark:text-red-300">We couldn't load this report</p>
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {reportErrorMessage ?? 'Something went wrong while fetching the report. Your data is safe — please try again.'}
+            </p>
+          </div>
+          <Button size="sm" variant="secondary" className="shrink-0 self-start" onClick={() => refetchReport()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {/* Bug #41: "—" = unknown (read failed); never fabricate a 0. */}
+      <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Active Users"
-          metric={getMetricValue('Active Users')}
+          metric={reportIsError ? '—' : getMetricValue('Active Users')}
           isLoading={isLoading}
           color="blue"
         />
         <MetricCard
           title="New Users"
-          metric={getMetricValue('New Users')}
+          metric={reportIsError ? '—' : getMetricValue('New Users')}
           isLoading={isLoading}
           color="emerald"
         />
         <MetricCard
           title="Projects Created"
-          metric={getMetricValue('Projects Created')}
+          metric={reportIsError ? '—' : getMetricValue('Projects Created')}
           isLoading={isLoading}
           color="amber"
         />
         <MetricCard
           title="Pipeline Value ($)"
-          metric={getMetricValue('Pipeline Value')}
+          metric={reportIsError ? '—' : getMetricValue('Pipeline Value')}
           isLoading={isLoading}
           color="indigo"
+          footnote={reportIsError ? undefined : getMetricDescription('Pipeline Value')}
         />
-      </Grid>
-      
+      </div>
+
       {!isLoading && report && (
-        <Card className="mt-6">
-          <Title>Report Details</Title>
-          <Text className="mt-2 text-sm text-gray-500">
-            Generated at: {new Date(report.generatedAt).toLocaleString()}
-          </Text>
+        <Card className="mt-6 p-5 sm:p-6">
+          <h2 className="text-base font-semibold leading-6 text-gray-900 dark:text-white">Report Details</h2>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            Generated at: <span className="tabular-nums">{new Date(report.generatedAt).toLocaleString()}</span>
+          </p>
         </Card>
       )}
     </div>

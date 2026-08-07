@@ -3,6 +3,13 @@ import { prisma } from '../../config/prisma';
 import { BaseTenantRepository } from '../../core/database/BaseTenantRepository';
 import { executeCursorQuery, CursorPaginatedResult } from '../../core/database/cursorPagination';
 
+/**
+ * Memory-safety cap for compliance exports (BUG FIX #71): exports never
+ * materialize more than this many rows; callers receive an explicit
+ * `truncated` flag when the cap cut rows off.
+ */
+export const AUDIT_EXPORT_ROW_CAP = 5000;
+
 export interface AuditQueryOptions {
   cursor?: string;
   limit?: number;
@@ -81,7 +88,20 @@ export class AuditRepository extends BaseTenantRepository<ActivityLog> {
     });
   }
 
-  async findAllForExport(organizationId: string, options: AuditQueryOptions): Promise<ActivityLog[]> {
+  /*
+   * BUG FIX (#71 — silent export truncation): the export was capped at 5000
+   * rows with NO truncation signal anywhere downstream: the processor
+   * reported `totalRecords: 5000` and the UI announced "Export complete",
+   * so an admin archiving a compliance trail could not know rows were
+   * dropped. The query now over-fetches by one row as a truncation probe
+   * (cap+1; a single extra row is negligible against the memory-safety
+   * intent of the cap) and returns an explicit `truncated` flag that the
+   * worker surfaces in the completion payload.
+   */
+  async findAllForExport(
+    organizationId: string,
+    options: AuditQueryOptions
+  ): Promise<{ logs: ActivityLog[]; truncated: boolean }> {
     const where: Prisma.ActivityLogWhereInput = {
       organizationId,
     };
@@ -97,15 +117,21 @@ export class AuditRepository extends BaseTenantRepository<ActivityLog> {
       };
     }
 
-    return prisma.activityLog.findMany({
+    const rows = await prisma.activityLog.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 5000, // Export cap for memory safety
+      take: AUDIT_EXPORT_ROW_CAP + 1, // +1 row = truncation probe (BUG FIX #71)
       include: {
         user: {
           select: { id: true, firstName: true, lastName: true, email: true },
         },
       },
     });
+
+    const truncated = rows.length > AUDIT_EXPORT_ROW_CAP;
+    return {
+      logs: truncated ? rows.slice(0, AUDIT_EXPORT_ROW_CAP) : rows,
+      truncated,
+    };
   }
 }

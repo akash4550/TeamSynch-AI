@@ -13,6 +13,12 @@ export const calendarSyncProcessor = async (job: Job<CalendarSyncJobData>) => {
   const data = validateTenantJobData(job.data);
   const { organizationId, userId, provider = 'GOOGLE' } = data;
 
+  // The completion event is delivered to the requesting user's socket room
+  // (see note below), so the tenant userId is mandatory for this job.
+  if (!userId) {
+    throw new Error('Tenant context (userId) missing in calendar sync job payload');
+  }
+
   const repository = new CalendarRepository();
   const realtimeService = new RealtimeService();
 
@@ -24,8 +30,14 @@ export const calendarSyncProcessor = async (job: Job<CalendarSyncJobData>) => {
   // Push local tasks/deadlines to external provider API and pull external changes
   const syncedEventsCount = tasks.length + projects.length;
 
-  // Broadcast real-time completion event to tenant room
-  realtimeService.emitToOrganization(organizationId, 'calendar.sync.completed', {
+  /*
+   * BUG FIX (sync completion broadcast tenant-wide): the event attributes
+   * the sync to a specific user (userId) and reports their sync results; the
+   * settings page that requested it is the only UI that consumes it. Emit it
+   * to the requesting user's room (`user:<userId>`, joined at handshake)
+   * instead of every connected member of the organization.
+   */
+  realtimeService.emitToUser(userId, 'calendar.sync.completed', {
     jobId: job.id,
     userId,
     provider,

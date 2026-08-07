@@ -1,7 +1,123 @@
 @import "tailwindcss";
 
+/*
+ * LAYOUT FIX — Tailwind v4 wiring (styles only, zero app logic touched):
+ * v4 does NOT auto-load a JS config file and ignores its `darkMode: 'class'`
+ * option unless the variant is redeclared. The old tailwind.config.js was
+ * therefore dead config (never compiled) and has been removed; this CSS file
+ * is now the single source of truth for the design system. Because of the old
+ * misconfiguration:
+ *   1. Every `dark:` utility was falling back to the OS media query, so the
+ *      ThemeToggle button appeared to do nothing.
+ *   2. The custom `primary-*` / `sidebar-*` palette never compiled, so branded
+ *      buttons/nav had invisible backgrounds.
+ */
+
+/* 1. Class-based dark mode — `.dark` is toggled on <html> by ThemeToggle. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * UI FOUNDATION FIX (#UI-foundation, 2026-08-06) — Tremor visual tokens.
+ * Root cause of the app-wide "unstyled" look: @tremor/react components emit
+ * `tremor-*`/`dark-tremor-*` utility classes from node_modules, which
+ * Tailwind v4's content scanning excludes — the production CSS contained
+ * ZERO tremor classes (verified empirically), so every Tremor Card, table,
+ * Badge, Select, chart wrapper, and brand button across 20+ pages rendered
+ * as dead CSS. This fix is styles-only (two parts, zero app logic):
+ *   1. @source — teach the scanner to read tremor's compiled components.
+ *   2. @theme tokens — define the namespaces those classes resolve against
+ *      (official Tremor v3 palette; harmonises with this app's existing
+ *      blue primary & slate dark surfaces). Superset by design: unused
+ *      tokens emit no CSS.
+ */
+@source "../../../node_modules/@tremor/react";
+
+/* 2. Design tokens formerly supplied by the JS config, now native CSS tokens.
+      A FULL 50–950 primary scale is declared because several existing
+      components referenced shades (200, 400, 800, 900) that were never defined. */
+@theme {
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+  --color-primary-950: #172554;
+
+  /* Sidebar surfaces (used as bg-sidebar-light / dark:bg-sidebar-dark) */
+  --color-sidebar-light: #ffffff;
+  --color-sidebar-dark: #1e293b;
+
+  /* ── Tremor v3 tokens (light + dark namespaces) — see foundation note above ── */
+  --color-tremor-brand-faint: #eff6ff;
+  --color-tremor-brand-muted: #bfdbfe;
+  --color-tremor-brand-subtle: #60a5fa;
+  --color-tremor-brand: #3b82f6;
+  --color-tremor-brand-emphasis: #1d4ed8;
+  --color-tremor-brand-inverted: #ffffff;
+  --color-tremor-background-muted: #f9fafb;
+  --color-tremor-background-subtle: #f3f4f6;
+  --color-tremor-background: #ffffff;
+  --color-tremor-background-emphasis: #374151;
+  --color-tremor-border: #e5e7eb;
+  --color-tremor-ring: #e5e7eb;
+  --color-tremor-subtle: #e5e7eb;
+  --color-tremor-content-subtle: #9ca3af;
+  --color-tremor-content: #6b7280;
+  --color-tremor-content-default: #6b7280;
+  --color-tremor-content-emphasis: #374151;
+  --color-tremor-content-strong: #111827;
+  --color-tremor-content-inverted: #ffffff;
+
+  --color-dark-tremor-brand-faint: #0b1229;
+  --color-dark-tremor-brand-muted: #172554;
+  --color-dark-tremor-brand-subtle: #1e40af;
+  --color-dark-tremor-brand: #3b82f6;
+  --color-dark-tremor-brand-emphasis: #60a5fa;
+  --color-dark-tremor-brand-inverted: #030712;
+  --color-dark-tremor-background-muted: #131a2b;
+  --color-dark-tremor-background-subtle: #1f2937;
+  --color-dark-tremor-background: #111827;
+  --color-dark-tremor-background-emphasis: #d1d5db;
+  --color-dark-tremor-border: #1f2937;
+  --color-dark-tremor-ring: #1f2937;
+  --color-dark-tremor-subtle: #1f2937;
+  --color-dark-tremor-content-subtle: #4b5563;
+  --color-dark-tremor-content: #6b7280;
+  --color-dark-tremor-content-default: #6b7280;
+  --color-dark-tremor-content-emphasis: #d1d5db;
+  --color-dark-tremor-content-strong: #f9fafb;
+  --color-dark-tremor-content-inverted: #000000;
+
+  /* Tremor radii / shadows */
+  --radius-tremor-small: 0.375rem;
+  --radius-tremor-default: 0.5rem;
+  --radius-tremor-full: 9999px;
+  --shadow-tremor-input: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-tremor-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-tremor-dropdown: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-dark-tremor-input: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-dark-tremor-card: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --shadow-dark-tremor-dropdown: 0 4px 6px -1px rgb(0 0 0 / 0.35), 0 2px 4px -2px rgb(0 0 0 / 0.35);
+
+  /* Tremor type scale */
+  --text-tremor-label: 0.75rem;
+  --text-tremor-label--line-height: 1rem;
+  --text-tremor-default: 0.875rem;
+  --text-tremor-default--line-height: 1.25rem;
+  --text-tremor-title: 1.125rem;
+  --text-tremor-title--line-height: 1.75rem;
+  --text-tremor-metric: 1.875rem;
+  --text-tremor-metric--line-height: 2.25rem;
+}
+
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 dark:bg-slate-900 dark:text-gray-100;
+    /* antialiased = crisper type; colors unchanged from the original base layer */
+    @apply bg-gray-50 text-gray-900 antialiased dark:bg-slate-900 dark:text-gray-100;
   }
 }

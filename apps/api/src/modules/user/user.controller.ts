@@ -6,6 +6,7 @@ import { asyncWrapper } from '../../core/utils/asyncWrapper';
 import { getValidatedRequest } from '../../core/middlewares/validateRequest';
 import {
   DeleteUserRequest,
+  ListUsersRequest,
   UpdateOwnProfileRequest,
   UpdateUserRequest,
   UpdateUserRoleRequest,
@@ -40,6 +41,22 @@ export class UserController {
       const organizationId =
         req.user!.organizationId;
 
+      /*
+       * BUG FIX (#114, 2026-08-06): read the VALIDATED, coerced query —
+       * never raw req.query again. This route mounts
+       * validateRequest(listUsersSchema), but its output was being
+       * discarded while raw string values flowed downstream:
+       * `?page=1&limit=10` (which the live UserManagement page sends on
+       * every render) reached Prisma as the STRINGS "1"/"10", hitting
+       * Int-typed `take` (client-side argument validation error → 500)
+       * and echoing `"1"` into `pagination.page` where the contract
+       * promises a number. getValidatedRequest answers 500-by-design if
+       * the schema wiring is ever removed, so the bypass cannot silently
+       * return. The `{ success, data }` response contract is unchanged.
+       */
+      const { query } =
+        getValidatedRequest<ListUsersRequest>(req);
+
 
 
       const result =
@@ -47,7 +64,7 @@ export class UserController {
 
           organizationId,
 
-          req.query
+          query
 
         );
 

@@ -95,6 +95,28 @@ export class PipelineStageRepository {
     });
   }
 
+  /*
+   * BUG FIX (#62): counts of opportunity ROWS referencing a stage —
+   * `live` (deletedAt: null) and `total` (including soft-deleted).
+   * Both are needed: the UI-facing guard must name live blockers, but the
+   * RESTRICT foreign key fires for soft-deleted rows too, so `total`
+   * distinguishes "move the opportunities" from "history must be retained".
+   */
+  async countReferencingOpportunities(
+    stageId: string,
+    organizationId: string,
+  ): Promise<{ live: number; total: number }> {
+    const [live, total] = await Promise.all([
+      prisma.opportunity.count({
+        where: { stageId, organizationId, deletedAt: null },
+      }),
+      prisma.opportunity.count({
+        where: { stageId, organizationId },
+      }),
+    ]);
+    return { live, total };
+  }
+
   async delete(
     id: string,
     organizationId: string,

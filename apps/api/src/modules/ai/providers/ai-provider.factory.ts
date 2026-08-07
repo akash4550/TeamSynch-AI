@@ -21,5 +21,10 @@ export const createAIProvider = (): AIProvider => {
     model,
     timeoutMs: env.AI_TIMEOUT_MS,
     maxOutputTokens: env.AI_MAX_OUTPUT_TOKENS,
+    // FEATURE (ledger #9): real embeddings — independently configurable
+    // (AI_EMBEDDING_MODEL, default text-embedding-3-small) and
+    // OpenAI-compatible endpoints via OPENAI_BASE_URL.
+    embeddingModel: env.AI_EMBEDDING_MODEL,
+    baseURL: env.OPENAI_BASE_URL,
   });
 };

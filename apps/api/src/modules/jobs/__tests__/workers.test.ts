@@ -44,11 +44,18 @@ jest.mock('../../../core/metrics/queueMetrics', () => ({
 }));
 
 jest.mock('../queues', () => ({
+  // TOOLCHAIN REPIN (ledger #13 — 2026-08-05): the mock froze the 4-queue
+  // world of its era. Two queues were added since: MAINTENANCE (BUG FIX
+  // #48 — stranded-maintenance worker) and DOCUMENTS (ledger #9 — RAG
+  // ingestion dispatch). The mock now mirrors the full 6-worker reality so
+  // the assertions below pin dispatch coverage, not stale topology.
   QUEUE_NAMES: {
     EMAIL: 'emailQueue',
     NOTIFICATIONS: 'notificationsQueue',
     ANALYTICS: 'analyticsQueue',
     AI: 'aiQueue',
+    MAINTENANCE: 'maintenanceQueue',
+    DOCUMENTS: 'documentsQueue',
   },
 }));
 
@@ -87,7 +94,19 @@ describe('job workers metrics', () => {
   it('records completed and failed jobs using the worker queue name', () => {
     startWorkers();
 
-    expect(mockWorkers).toHaveLength(4);
+    // TOOLCHAIN REPIN (ledger #13 — 2026-08-05): 4 → 6 workers (maintenance
+    // #48, documents — ledger #9). Also pins that every started worker has
+    // a real queue name — a missing QUEUE_NAMES entry must never slip back
+    // to `undefined` (that is how this stale mock failed to notice the drift).
+    expect(mockWorkers).toHaveLength(6);
+    expect(mockWorkers.map(worker => worker.name).sort()).toEqual([
+      'aiQueue',
+      'analyticsQueue',
+      'documentsQueue',
+      'emailQueue',
+      'maintenanceQueue',
+      'notificationsQueue',
+    ]);
 
     const emailWorker = mockWorkers.find(
       worker => worker.name === 'emailQueue',

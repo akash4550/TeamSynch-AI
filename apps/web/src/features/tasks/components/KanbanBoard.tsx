@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -28,6 +28,21 @@ export const KanbanBoard = ({ tasks: initialTasks }: KanbanBoardProps) => {
   const [activeTask, setActiveTask] = useState<any | null>(null);
   const queryClient = useQueryClient();
 
+  /*
+   * BUG FIX (phantom state on failed moves): drag-over/drag-end write the
+   * board OPTIMISTICALLY via setTasks, but the persist mutation had no
+   * onError at all — a rejected PATCH (400/403/network) left the card
+   * sitting in its new column forever even though the server never saved
+   * it. Other users never received a socket event either (Bug #14's bridge
+   * only fires on real persisted moves), so the local board silently
+   * diverged from the truth until a manual refetch snapped it back. We now
+   * snapshot the board when a drag starts and roll back to that snapshot
+   * if the persist fails, with a visible notification so the divergence
+   * is honest.
+   */
+  const dragStartSnapshotRef = useRef<any[] | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
+
   useEffect(() => {
     setTasks(initialTasks);
   }, [initialTasks]);
@@ -51,6 +66,11 @@ export const KanbanBoard = ({ tasks: initialTasks }: KanbanBoardProps) => {
     const { active } = event;
     const task = tasks.find(t => t.id === active.id);
     if (task) setActiveTask(task);
+    // Rollback baseline for this drag: nothing has been optimistically
+    // mutated yet, so this snapshot is the last server-truth state.
+    dragStartSnapshotRef.current = tasks;
+    // A fresh drag settles the previous failure notification.
+    setMoveError(null);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -164,16 +184,38 @@ export const KanbanBoard = ({ tasks: initialTasks }: KanbanBoardProps) => {
     }).sort((a, b) => a.position - b.position);
     setTasks(newTasks);
 
-    // Persist
-    moveTaskMutation.mutate({
+    // Persist. If the server rejects the move, restore the pre-drag
+    // snapshot (the optimistic preview would otherwise leave phantom state)
+    // and surface the failure instead of silently diverging from the truth.
+    const rollbackSnapshot = dragStartSnapshotRef.current;
+    moveTaskMutation.mutate(
+      {
         taskId: activeId as string,
         status: newStatus,
         position: newPosition
-    });
+      },
+      {
+        onSuccess: () => {
+          setMoveError(null);
+        },
+        onError: (error: any) => {
+          if (rollbackSnapshot) setTasks(rollbackSnapshot);
+          const apiMessage = error?.response?.data?.error?.message;
+          setMoveError(
+            typeof apiMessage === 'string' && apiMessage.length > 0
+              ? `Move failed: ${apiMessage}`
+              : 'Could not move this task. The board has been restored.'
+          );
+        },
+      }
+    );
   };
 
   return (
-    <div className="flex h-full overflow-x-auto pb-4 gap-6">
+    // RESPONSIVE FIX: tighter gutters on phones (columns peek to hint scrollability),
+    // min-h-0 so the flex child can actually shrink and scroll horizontally.
+    // ALL drag-and-drop logic (sensors, collision detection, handlers) is unchanged.
+    <div className="relative flex h-full min-h-0 gap-4 overflow-x-auto pb-4 sm:gap-6">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -193,6 +235,25 @@ export const KanbanBoard = ({ tasks: initialTasks }: KanbanBoardProps) => {
           {activeTask ? <TaskCard task={activeTask} /> : null}
         </DragOverlay>
       </DndContext>
+
+      {/* Honest failure surface: shown only when a persist PATCH was rejected
+          and the board was rolled back (previously the failure was silent). */}
+      {moveError && (
+        <div
+          role="alert"
+          className="absolute bottom-3 right-3 z-20 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 shadow-md dark:border-red-900/50 dark:bg-red-900/40 dark:text-red-300"
+        >
+          <span>{moveError}</span>
+          <button
+            type="button"
+            aria-label="Dismiss move failure"
+            onClick={() => setMoveError(null)}
+            className="font-semibold text-red-500 hover:text-red-700 dark:hover:text-red-200"
+          >
+            &times;
+          </button>
+        </div>
+      )}
     </div>
   );
 };

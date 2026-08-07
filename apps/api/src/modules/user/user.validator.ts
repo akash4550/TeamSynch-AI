@@ -70,6 +70,7 @@ export const listUsersSchema = z.object({
   }),
 });
 
+export type ListUsersRequest = z.infer<typeof listUsersSchema>;
 export type UpdateOwnProfileRequest = z.infer<typeof updateOwnProfileSchema>;
 export type UpdateUserRequest = z.infer<typeof updateUserSchema>;
 export type UpdateUserRoleRequest = z.infer<typeof updateUserRoleSchema>;

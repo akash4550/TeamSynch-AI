@@ -9,6 +9,25 @@ import type {
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
+export const apiBaseUrl = baseURL;
+
+/*
+ * FEATURE (ledger #8 — public logo rendering): <img> elements cannot attach
+ * Authorization headers, so the API serves logos through the public route
+ * GET /organizations/:id/logo (local: streamed bytes; S3: 302 to a fresh
+ * presign — never an expiring stored blob). The optional `versionSeed` (the
+ * stored logo reference, which changes on every upload) rides along as a
+ * cache-busting query param so replacing a logo never shows the previous
+ * image for the route's 5-minute browser-cache window; the server ignores it.
+ */
+export const organizationLogoUrl = (
+  organizationId: string,
+  versionSeed?: string | null,
+): string =>
+  `${apiBaseUrl}/organizations/${organizationId}/logo${
+    versionSeed ? `?v=${encodeURIComponent(versionSeed)}` : ''
+  }`;
+
 export const api = axios.create({
   baseURL,
   withCredentials: true,

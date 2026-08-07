@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
 import { ZodError } from 'zod';
+import { MulterError } from 'multer';
 import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 
 import { AppError } from '../errors/AppError';
@@ -23,7 +24,26 @@ export const errorMiddleware = (
 
   else if (err instanceof ZodError) {
     status = 400;
-    message = 'Validation failed';
+    /*
+     * BUG FIX (#46): match validateRequest's message composition — raw
+     * ZodErrors reaching this middleware (e.g. the documents module's
+     * inline schema.parse calls) used to collapse to a bare 'Validation
+     * failed' with no detail for the client to act on.
+     */
+    message = `Validation failed: ${err.issues.map((issue) => issue.message).join(',')}`;
+  }
+
+  /*
+   * BUG FIX (#46): multer parser failures (file over the 50MB documents
+   * limit or the 2MB logo limit, unexpected multipart fields, ...) bubble
+   * up OUTSIDE any controller try/catch and used to surface as
+   * 500 'Internal Server Error'. Multer's own messages are safe static
+   * strings, so map them to honest client errors: 413 for size limits,
+   * 400 for everything else.
+   */
+  else if (err instanceof MulterError) {
+    status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+    message = err.message || 'Invalid upload';
   }
 
   else if (

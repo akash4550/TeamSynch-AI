@@ -79,6 +79,24 @@ export class DocumentRepository {
     });
   }
 
+  // BUG FIX (#61): soft-delete an entire version family (root + every
+  // uploaded version row) in one statement. Used by deleteDocument after
+  // every family member's storage object has been removed. The
+  // `deletedAt: null` predicate keeps concurrent/repeat deletes idempotent.
+  async softDeleteFamily(
+    organizationId: string,
+    rootId: string,
+  ): Promise<Prisma.BatchPayload> {
+    return prisma.document.updateMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        OR: [{ id: rootId }, { parentDocumentId: rootId }],
+      },
+      data: { deletedAt: new Date() },
+    });
+  }
+
   async getVersions(organizationId: string, documentId: string): Promise<Document[]> {
     // Find base document
     const targetDoc = await this.findById(organizationId, documentId);

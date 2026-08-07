@@ -9,6 +9,7 @@ import {
   updateProjectSchema,
   getProjectSchema,
   deleteProjectSchema,
+  projectListSchema,
 } from './project.validator';
 import { PROJECT_PERMISSIONS } from './project.permissions';
 
@@ -20,6 +21,16 @@ router.use(requireAuth);
 router.get(
   '/',
   requirePermission(PROJECT_PERMISSIONS.READ),
+  /*
+   * BUG FIX (#113, 2026-08-06): projectListSchema existed in
+   * project.validator.ts — fully written (coerced page, ≤500 limit cap,
+   * status/sortBy enums, strict keys) — but this route NEVER mounted it,
+   * and the controller read raw req.query: the only list endpoint besides
+   * documents (#112) where garbage sorts/pages answered an opaque 500
+   * (PrismaClientValidationError) and ?limit=99999999 bypassed the cap
+   * the schema advertises. Wire it exactly like every sibling route.
+   */
+  validateRequest(projectListSchema),
   controller.getProjects
 );
 

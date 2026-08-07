@@ -612,26 +612,58 @@ export class TeamRepository {
 
 
 
-    return prisma.teamInvitation.create({
-
-      data:{
-
-        organizationId,
-
-        teamId,
-
-        email,
-
-        invitedById,
-
-        expiresAt,
-
-        status:InvitationStatus.PENDING,
-
+    /*
+     * FEATURE (ledger #1 — invitation accept lifecycle): re-inviting the
+     * same team+email previously crashed on @@unique([teamId, email])
+     * (P2002 -> opaque 409) and would have left two live tokens if the
+     * unique were ever relaxed. Upsert the single row instead: status back
+     * to PENDING, fresh 7-day expiry and inviter attribution. Because the
+     * accept token binds id + expiresAt (see core/utils/inviteToken.ts),
+     * bumping expiresAt automatically kills every previously emailed link
+     * for this team+email — supersede without a revoked state.
+     */
+    return prisma.teamInvitation.upsert({
+      where: {
+        teamId_email: {
+          teamId,
+          email,
+        },
       },
-
+      update: {
+        organizationId,
+        invitedById,
+        expiresAt,
+        status: InvitationStatus.PENDING,
+      },
+      create: {
+        organizationId,
+        teamId,
+        email,
+        invitedById,
+        expiresAt,
+        status: InvitationStatus.PENDING,
+      },
     });
 
+  }
+
+  /*
+   * FEATURE (ledger #1): read one invitation with the context the public
+   * accept page is allowed to see — team and organization NAME only via
+   * select, never the whole tenant graph.
+   */
+  async findInvitationById(id: string) {
+    return prisma.teamInvitation.findUnique({
+      where: { id },
+      include: {
+        team: {
+          select: { id: true, name: true, deletedAt: true },
+        },
+        organization: {
+          select: { id: true, name: true },
+        },
+      },
+    });
   }
 
 }

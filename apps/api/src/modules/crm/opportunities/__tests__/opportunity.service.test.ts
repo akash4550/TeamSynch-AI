@@ -77,6 +77,14 @@ describe('OpportunityService', () => {
         expectedRevenue: 20000,
       };
 
+      // TOOLCHAIN REPIN (ledger #13 — 2026-08-05): updateOpportunity gained
+      // a pre-fetch tenant check (Pipeline Board broadcast fix — 404 before
+      // touching the update). The auto-mocked findById returned undefined,
+      // so this test died at the 404 instead of reaching the update path.
+      repositoryMock.findById = jest.fn().mockResolvedValue({
+        id: 'opportunity-1',
+        stageId: 'stage-1',
+      });
       repositoryMock.update.mockResolvedValue(
         updatedOpportunity as any,
       );
@@ -114,6 +122,16 @@ describe('OpportunityService', () => {
     });
 
     it('does not emit an event when the update fails', async () => {
+      // TOOLCHAIN REPIN (ledger #13 — 2026-08-05): this test previously
+      // passed for the WRONG reason — the un-stubbed findById returned
+      // undefined and the pre-fetch 404 happened to carry the same
+      // 'Opportunity not found' message, so the update-failure path was
+      // never exercised. Stub the pre-fetch so the rejection below really
+      // comes from repository.update.
+      repositoryMock.findById = jest.fn().mockResolvedValue({
+        id: 'opportunity-1',
+        stageId: 'stage-1',
+      });
       repositoryMock.update.mockRejectedValue(
         new Error('Opportunity not found'),
       );
@@ -129,6 +147,104 @@ describe('OpportunityService', () => {
       ).rejects.toThrow('Opportunity not found');
 
       expect(eventBus.emitEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  /*
+   * BUG FIX (#104, 2026-08-06) pins — updateOpportunity forwards the
+   * authenticated actor plus stage-change context to repository.update
+   * as a StageChangeActivityRecord ONLY for a real, actor-attributed
+   * stage change (the PipelineBoard drag path previously wrote NO audit
+   * row at all). The in-transaction creation itself is pinned in
+   * opportunity-stage-audit.test.ts.
+   */
+  describe('updateOpportunity stage-change audit descriptor (BUG FIX #104)', () => {
+    const previous = {
+      id: 'opportunity-1',
+      stageId: 'stage-1',
+      leadId: 'lead-1',
+      lead: { id: 'lead-1', title: 'Acme deal', score: 40, status: 'NEW' },
+      stage: {
+        id: 'stage-1',
+        name: 'Qualification',
+        probability: 25,
+        position: 1,
+      },
+    };
+
+    beforeEach(() => {
+      repositoryMock.findById = jest.fn().mockResolvedValue(previous);
+      repositoryMock.update = jest.fn().mockResolvedValue({
+        ...previous,
+        stageId: 'stage-2',
+      });
+    });
+
+    it('forwards actor + stage context as a descriptor on a real stage move', async () => {
+      await service.updateOpportunity(
+        'org-1',
+        'opportunity-1',
+        { stageId: 'stage-2' },
+        'user-9',
+      );
+
+      expect(repositoryMock.update).toHaveBeenCalledWith(
+        'opportunity-1',
+        'org-1',
+        expect.objectContaining({ stageId: 'stage-2' }),
+        {
+          createdById: 'user-9',
+          leadId: 'lead-1',
+          leadTitle: 'Acme deal',
+          previousStageName: 'Qualification',
+        },
+      );
+    });
+
+    it('passes NO descriptor for a no-op drop back onto the same stage', async () => {
+      await service.updateOpportunity(
+        'org-1',
+        'opportunity-1',
+        { stageId: 'stage-1' },
+        'user-9',
+      );
+
+      // Exact pre-#104 3-arg call shape: nothing to audit.
+      expect(repositoryMock.update).toHaveBeenCalledWith(
+        'opportunity-1',
+        'org-1',
+        expect.objectContaining({ stageId: 'stage-1' }),
+      );
+      expect(repositoryMock.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes NO descriptor for a stageId-free patch (revenue edit)', async () => {
+      await service.updateOpportunity(
+        'org-1',
+        'opportunity-1',
+        { expectedRevenue: 42000 },
+        'user-9',
+      );
+
+      expect(repositoryMock.update).toHaveBeenCalledWith(
+        'opportunity-1',
+        'org-1',
+        expect.objectContaining({ expectedRevenue: 42000 }),
+      );
+    });
+
+    it('passes NO descriptor when the caller supplies no actor (fail-closed attribution)', async () => {
+      await service.updateOpportunity(
+        'org-1',
+        'opportunity-1',
+        { stageId: 'stage-2' },
+      );
+
+      expect(repositoryMock.update).toHaveBeenCalledWith(
+        'opportunity-1',
+        'org-1',
+        expect.objectContaining({ stageId: 'stage-2' }),
+      );
     });
   });
 

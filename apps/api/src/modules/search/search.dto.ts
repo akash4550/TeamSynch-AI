@@ -6,6 +6,20 @@ export const SearchModule = {
   PROJECTS: 'projects',
   TASKS: 'tasks',
   CRM: 'crm',
+  /*
+   * BUG FIX (#85, 2026-08-05 — documents module rejected at the door):
+   * every other layer already supports a fourth search module — the
+   * SearchProvider interface type includes 'documents', SearchService
+   * gates it behind PERMISSIONS.DOCUMENT.READ, PostgresSearchProvider
+   * implements a full org-scoped Document FTS/ILIKE branch, and the
+   * default (modules omitted) search silently INCLUDES documents. But
+   * this whitelist omitted it, so an explicit `?modules=documents`
+   * request was rejected with 400 "Unsupported search module:
+   * documents" — a stale boundary lying about a fully implemented,
+   * permission-gated feature. Whitelist, interface, service and provider
+   * are now aligned one-for-one.
+   */
+  DOCUMENTS: 'documents',
 } as const;
 
 export type SearchModule =
@@ -15,6 +29,7 @@ const searchModuleSchema = z.enum([
   SearchModule.PROJECTS,
   SearchModule.TASKS,
   SearchModule.CRM,
+  SearchModule.DOCUMENTS, // Bug #85 — see SearchModule const above
 ]);
 
 const searchModulesSchema = z

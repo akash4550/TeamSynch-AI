@@ -39,6 +39,8 @@ const defaultAuth = (): ReturnType<typeof useAuth> => ({
   login: vi.fn(),
   logout: vi.fn(),
   clearSession: vi.fn(),
+  // BUG FIX (#75): required by the widened AuthContextValue contract.
+  refreshSession: vi.fn().mockResolvedValue('refreshed-access-token'),
 });
 
 const LocationProbe = () => {
@@ -204,7 +206,19 @@ describe('LoginPage', () => {
 
   test('shows one generic message for authentication failures', async () => {
     const browserUser = userEvent.setup();
-    const login = vi.fn().mockRejectedValue(new Error('Inactive user'));
+    /*
+     * REPIN (#102, 2026-08-06): this test's rejection simulated the
+     * credential failure class (a deactivated account), which the API
+     * deliberately maps to the same vague 401 as a wrong password — so
+     * shape it that way. The assertion's intent survives: no server-side
+     * reason ('Inactive user') may leak. Non-401 failures (429/5xx) are a
+     * different class — covered by LoginPageErrors.test.tsx.
+     */
+    const credentialFailure = Object.assign(new Error('Inactive user'), {
+      isAxiosError: true,
+      response: { status: 401 },
+    });
+    const login = vi.fn().mockRejectedValue(credentialFailure);
     vi.mocked(useAuth).mockReturnValue({ ...defaultAuth(), login });
 
     render(

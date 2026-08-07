@@ -9,6 +9,9 @@ export type DomainEvent =
   | 'TaskSoftDeleted'
   | 'ProjectCreated'
   | 'ProjectUpdated'
+  // Bug #84: parity with TaskSoftDeleted / ClientDeleted — project
+  // soft-deletes are now emitted (and audited) instead of vanishing.
+  | 'ProjectDeleted'
   | 'TeamMemberInvited'
   | 'UserJoinedTeam'
   | 'DocumentUploaded'

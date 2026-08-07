@@ -1,7 +1,22 @@
-import { AIProvider, AICompletionRequest, AICompletionResponse } from './ai-provider.interface';
+import { AIProvider, AICompletionRequest, AICompletionResponse, AIEmbeddingResponse } from './ai-provider.interface';
+import { AIProviderError } from './ai-provider.error';
 
 export class MockAIProvider implements AIProvider {
   readonly name = 'mock';
+
+  /*
+   * FEATURE (ledger #9): embeddings must be REAL. The mock completion
+   * provider fabricates text harmlessly (dev UX), but a fabricated vector
+   * would silently poison the pgvector store and every citation score
+   * downstream — so this fails CLOSED (same precedent as the #91 billing
+   * 503): set AI_PROVIDER=OPENAI with a real OPENAI_API_KEY for RAG.
+   */
+  async generateEmbedding(_text: string): Promise<AIEmbeddingResponse> {
+    throw new AIProviderError(
+      'Embeddings require a real AI provider (set AI_PROVIDER=OPENAI with OPENAI_API_KEY)',
+      { provider: this.name, model: 'none', statusCode: 503, providerCode: 'embeddings_unavailable' },
+    );
+  }
 
   async generateCompletion(request: AICompletionRequest): Promise<AICompletionResponse> {
     // Simulate network delay

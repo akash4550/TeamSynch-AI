@@ -1,5 +1,11 @@
-import { emailQueue, notificationsQueue, analyticsQueue, crmQueue, documentsQueue } from '../queues';
-
+/*
+ * Shared BullMQ job-payload contracts (tenant context enforced by workers).
+ * The former `JobService` enqueue-helper class was removed in the Bug #59
+ * dead-code sweep: it had zero instantiations/call sites anywhere in the
+ * repo (verified by census) — every live producer enqueues directly via
+ * the queue objects (ai.controller, audit.service, calendar.service,
+ * stripe.service, scheduler). Only these live type contracts remain.
+ */
 export interface BaseJobData {
   organizationId: string;
   userId?: string; // Who triggered this job, if applicable
@@ -11,46 +17,4 @@ export interface EmailJobData extends BaseJobData {
   subject: string;
   template: string;
   context: any;
-}
-
-export class JobService {
-  /**
-   * Enqueues an email job ensuring tenant context is passed
-   */
-  async enqueueEmail(jobName: string, data: EmailJobData, options = {}) {
-    if (!data.organizationId) throw new Error('organizationId is required for multi-tenant isolation');
-    return emailQueue.add(jobName, data, options);
-  }
-
-  /**
-   * Enqueues a notification job
-   */
-  async enqueueNotification(jobName: string, data: BaseJobData, options = {}) {
-    if (!data.organizationId) throw new Error('organizationId is required');
-    return notificationsQueue.add(jobName, data, options);
-  }
-
-  /**
-   * Enqueues a document processing job (e.g., extracting metadata)
-   */
-  async enqueueDocumentProcessing(jobName: string, data: BaseJobData, options = {}) {
-    if (!data.organizationId) throw new Error('organizationId is required');
-    return documentsQueue.add(jobName, data, options);
-  }
-  
-  /**
-   * Enqueues a background analytics calculation task
-   */
-  async enqueueAnalyticsTask(jobName: string, data: BaseJobData, options = {}) {
-    if (!data.organizationId) throw new Error('organizationId is required');
-    return analyticsQueue.add(jobName, data, options);
-  }
-
-  /**
-   * Enqueues a CRM background action (e.g. Lead follow-up)
-   */
-  async enqueueCRMAction(jobName: string, data: BaseJobData, options = {}) {
-    if (!data.organizationId) throw new Error('organizationId is required');
-    return crmQueue.add(jobName, data, options);
-  }
 }

@@ -1,8 +1,10 @@
 import { Request, Response } from 'express';
 
 import { TeamService } from './team.service';
+import type { ListTeamsRequest } from './team.validator';
 
 import { asyncWrapper } from '../../core/utils/asyncWrapper';
+import { getValidatedRequest } from '../../core/middlewares/validateRequest';
 
 
 
@@ -36,6 +38,25 @@ export class TeamController {
       const organizationId =
         req.user!.organizationId;
 
+      /*
+       * BUG FIX (#115, 2026-08-06): read the VALIDATED, coerced query —
+       * never raw req.query again. Same discarded-validation root as
+       * #114 (users): GET /teams mounts validateRequest(listTeamsSchema)
+       * (page/limit coerce + defaults, ≤100 cap, sortBy/sortOrder enums),
+       * but its output was being discarded while raw string values
+       * flowed downstream. Today's live callers (TeamsPage: search only,
+       * TeamDashboard: bare) never send page/limit, so the defaults
+       * happen to apply — but the FIRST caller to pass ?limit=10 would
+       * hit Prisma's Int-typed `take` with the string "10" (client-side
+       * argument validation error → 500). The mounted schema advertised
+       * pagination the controller never honored. getValidatedRequest
+       * answers 500-by-design if the wiring is ever removed, so the
+       * bypass cannot silently return. The `{ success, data }` response
+       * contract is unchanged.
+       */
+      const { query } =
+        getValidatedRequest<ListTeamsRequest>(req);
+
 
 
       const teams =
@@ -43,7 +64,7 @@ export class TeamController {
 
           organizationId,
 
-          req.query
+          query
 
         );
 
@@ -446,4 +467,49 @@ export class TeamController {
 
   );
 
+
+  /*
+   * FEATURE (ledger #1 — invitation accept lifecycle): PUBLIC handlers
+   * mounted via team.public.routes.ts (no requireAuth — the HMAC token
+   * is the credential). Same response-envelope conventions as the
+   * authenticated handlers.
+   */
+  inspectInvitation = asyncWrapper(
+    async (
+      req: Request,
+      res: Response
+    ) => {
+      const token = String(req.params.token);
+
+      const details =
+        await this.service.inspectInvitation(
+          token
+        );
+
+      res.status(200).json({
+        success: true,
+        data: details,
+      });
+    }
+  );
+
+  acceptInvitation = asyncWrapper(
+    async (
+      req: Request,
+      res: Response
+    ) => {
+      const token = String(req.params.token);
+
+      const result =
+        await this.service.acceptInvitation(
+          token,
+          req.body
+        );
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    }
+  );
 }

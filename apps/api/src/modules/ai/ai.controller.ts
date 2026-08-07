@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { getValidatedRequest } from '../../core/middlewares/validateRequest';
-import { AskAssistantRequest, SummarizeTaskRequest } from './ai.dto';
+import { AskAssistantRequest, RagAskRequest, SummarizeTaskRequest } from './ai.dto';
 import { aiQueue } from '../jobs/queues';
 import { RAGService } from './services/rag.service';
 import { ContextBuilder } from './context/context.builder';
@@ -63,7 +63,15 @@ export class AIController {
   }
 
   async askRAGChat(req: Request, res: Response): Promise<void> {
-    const { query } = req.body;
+    /*
+     * BUG FIX (unvalidated `req.body.query` — Bug #38): read through the
+     * SAME getValidatedRequest<T> contract the sibling handlers use, so a
+     * missing/non-string/oversized `query` is rejected with a 400
+     * "Validation failed: ..." at the door instead of crashing the
+     * embedding pipeline into a 500 (or silently burning provider tokens).
+     */
+    const { body } = getValidatedRequest<RagAskRequest>(req);
+    const { query } = body;
     const organizationId = req.user!.organizationId;
     const userId = req.user!.id;
 

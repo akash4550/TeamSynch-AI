@@ -55,8 +55,14 @@ export const aiProcessor = async (job: Job<AICompletionJobData>) => {
     }
   );
 
-  // Emit real-time completion event to tenant room via Socket.IO/Redis PubSub
-  realtimeService.emitToOrganization(organizationId, 'ai.completion.finished', {
+  /*
+   * BUG FIX (AI answer broadcast tenant-wide): the completion payload — the
+   * full AI answer text plus the asker's userId — was emitted to the entire
+   * organization room, leaking every user's AI interactions to all tenant
+   * sockets. The answer belongs only to the asking user (their socket joins
+   * `user:<userId>` at handshake), so emit to the user room instead.
+   */
+  realtimeService.emitToUser(userId, 'ai.completion.finished', {
     jobId: job.id,
     userId,
     featureTag,
