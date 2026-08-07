@@ -89,6 +89,10 @@ function assertBrowserRender(chromePath) {
         '--headless=new',
         '--disable-gpu',
         '--no-sandbox',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--disable-extensions',
+        '--no-proxy-server',
         `--user-data-dir=${userDataDirectory}`,
         '--virtual-time-budget=5000',
         '--dump-dom',
@@ -106,7 +110,12 @@ function assertBrowserRender(chromePath) {
 
   const root = result.stdout.match(/<div id="root"[^>]*>([\s\S]*?)<\/div>/i);
   if (!root || !root[1].trim()) {
-    throw new Error('React did not render content into #root');
+    const diagnostics = [
+      result.error?.message,
+      result.stderr?.trim(),
+      result.stdout?.trim().slice(0, 1_000),
+    ].filter(Boolean).join('\n');
+    throw new Error(`React did not render content into #root${diagnostics ? `:\n${diagnostics}` : ''}`);
   }
 }
 
