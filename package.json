@@ -41,6 +41,10 @@
     "backup:cleanup": "node scripts/backup-recovery.mjs cleanup"
   },
   "overrides": {
+    "fast-uri": "3.1.5",
+    "@apidevtools/json-schema-ref-parser": {
+      "js-yaml": "4.3.1"
+    },
     "ioredis": "5.10.1",
     "@tremor/react": {
       "react": "19.2.7",
