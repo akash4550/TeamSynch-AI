@@ -1,8 +1,8 @@
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../core/errors/AppError';
-import { PLAN_CONFIG, PlanQuotas } from './plans.config';
+import { PLAN_CONFIG, PlanQuotas, stripePriceForPlan } from './plans.config';
 
-export type EntitlementFeature = 'USER' | 'PROJECT' | 'AI_REQUEST';
+export type EntitlementFeature = 'USER' | 'PROJECT' | 'AI_REQUEST' | 'STORAGE';
 
 export interface SubscriptionStatusResponse {
   plan: string;
@@ -14,6 +14,14 @@ export interface SubscriptionStatusResponse {
     aiRequests: { current: number; max: number; percentage: number };
     storageMb: { current: number; max: number; percentage: number };
   };
+  /*
+   * FEATURE (ledger #11): operator-configured Stripe price ids per paid
+   * tier (null when that tier's STRIPE_PRICE_* env is unset). The web
+   * upgrade buttons previously POSTed hardcoded fictional ids
+   * ('price_pro_monthly') that no real Stripe account could honor; they
+   * now render from this and honestly disable unconfigured tiers.
+   */
+  plans: Array<{ tier: 'STARTER' | 'PRO' | 'BUSINESS'; priceId: string | null }>;
 }
 
 export class EntitlementService {
@@ -37,7 +45,23 @@ export class EntitlementService {
    * Asserts subscription status & quota limits before resource creation.
    * Throws HTTP 402 Payment Required if subscription status is PAST_DUE, CANCELED, or UNPAID.
    */
-  async checkEntitlement(organizationId: string, feature: EntitlementFeature): Promise<void> {
+  /*
+   * BUG FIX (#55 — the storage quota was the last un-enforced PlanQuota):
+   * PlanQuotas.maxStorageMb (FREE=500MB … BUSINESS=500GB) and the usage
+   * bars on SubscriptionSettingsPage both read the SAME document._sum
+   * aggregation below, but no gate ever ran — a FREE org could upload
+   * unbounded bytes while its billing page displayed a fabricated-limit
+   * storage bar. This is the third and final feature gate of the class
+   * closed for USER / AI_REQUEST in BUG FIX #49.
+   * `options.additionalBytes` lets the caller include the in-flight upload
+   * (known only after multer parses the multipart body) so the LAST file
+   * that still fits is allowed and only the one that overflows is blocked.
+   */
+  async checkEntitlement(
+    organizationId: string,
+    feature: EntitlementFeature,
+    options?: { additionalBytes?: number },
+  ): Promise<void> {
     const { quotas, org } = await this.getOrganizationPlanQuotas(organizationId);
 
     const subStatus = (org.subscriptionStatus || 'ACTIVE').toUpperCase();
@@ -67,6 +91,24 @@ export class EntitlementService {
       if (activeProjects >= quotas.maxProjects) {
         throw new AppError(
           `Plan quota exceeded: Current plan allows max ${quotas.maxProjects} projects. Please upgrade your subscription.`,
+          403
+        );
+      }
+    } else if (feature === 'STORAGE') {
+      // Must stay identical to the getSubscriptionUsage aggregation below
+      // so the usage bar and this gate always agree.
+      const documentAggregation = await prisma.document.aggregate({
+        where: { organizationId, deletedAt: null },
+        _sum: { fileSize: true },
+      });
+      const projectedBytes =
+        Number(documentAggregation._sum.fileSize || 0) +
+        (options?.additionalBytes ?? 0);
+      const limitBytes = quotas.maxStorageMb * 1024 * 1024;
+
+      if (projectedBytes > limitBytes) {
+        throw new AppError(
+          `Plan quota exceeded: Current plan allows max ${quotas.maxStorageMb} MB of document storage. Please upgrade your subscription.`,
           403
         );
       }
@@ -134,6 +176,13 @@ export class EntitlementService {
           percentage: Math.min(100, Math.round((currentStorageMb / quotas.maxStorageMb) * 100)),
         },
       },
+      // FEATURE (ledger #11): server-driven price ids (null = tier not
+      // configured on this deployment — the web disables its button and
+      // says so, instead of posting a fictional id).
+      plans: (['STARTER', 'PRO', 'BUSINESS'] as const).map((tier) => ({
+        tier,
+        priceId: stripePriceForPlan(tier),
+      })),
     };
   }
 }

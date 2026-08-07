@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
-import {getNormalizedRoute} from '../utils/requestRoute';
+import { getNormalizedRoute, getMetricsRoute } from '../utils/requestRoute';
 import { recordHttpRequest } from '../metrics/httpMetrics';
 
 export const requestObservability = (req: Request, res: Response, next: NextFunction) => {
@@ -21,11 +21,16 @@ export const requestObservability = (req: Request, res: Response, next: NextFunc
 
   res.once('finish', () => {
     const durationMs = performance.now() - req.requestStartedAt;
-    
+
+    // #93: two different consumers, two different truths. Prometheus gets a
+    // CARDINALITY-BOUNDED label (unmatched 404s collapse to the 'unmatched'
+    // constant — see requestRoute.ts); the access log keeps the raw path,
+    // where scanner noise is useful forensic signal, not a memory leak.
+    const metricsRoute = getMetricsRoute(req);
     const route = getNormalizedRoute(req);
     recordHttpRequest({
     method: req.method,
-    route: route,
+    route: metricsRoute,
     status: res.statusCode,
     durationSeconds: durationMs / 1000
   });

@@ -4,10 +4,16 @@ import { PROMPTS } from '../prompts';
 
 export interface RAGAnswerResponse {
   answer: string;
+  // 'vector' = real cosine retrieval; 'text_fallback' = pg_trgm/ILIKE
+  // lexical retrieval (citations carry relevanceScore: null — the UI shows
+  // "text match", never a fabricated percentage).
+  retrievalMethod: 'vector' | 'text_fallback';
   citations: Array<{
     documentId?: string;
     snippet: string;
-    relevanceScore: number;
+    // Ledger #9: null whenever retrieval was NOT a real vector distance
+    // (previously the fallback pinned 0.2 → a fabricated "80% Match").
+    relevanceScore: number | null;
   }>;
 }
 
@@ -23,14 +29,15 @@ export class RAGService {
     userId: string,
     query: string
   ): Promise<RAGAnswerResponse> {
-    // 1. Vector similarity search over tenant chunks
-    const relevantChunks = await this.vectorService.similaritySearch(
-      organizationId,
-      query,
-      5
-    );
+    // 1. Similarity search over tenant chunks. Ledger #9: the asking user is
+    //    threaded through so the question-embedding call is billed to them
+    //    (feature 'rag_query') — the previous code embedded with no tenant
+    //    or user attribution at all. An embedding-provider outage surfaces
+    //    as an honest 503 (see VectorService) instead of fabricated results.
+    const { chunks: relevantChunks, retrievalMethod } =
+      await this.vectorService.similaritySearch(organizationId, query, 5, userId);
 
-    // 2. Build augmented prompt context from retrieved vector chunks
+    // 2. Build augmented prompt context from retrieved chunks
     const contextSnippets = relevantChunks
       .map((c, idx) => `[Source ${idx + 1}]:\n${c.contentChunk}`)
       .join('\n\n');
@@ -48,15 +55,19 @@ export class RAGService {
       }
     );
 
-    // 4. Map citations with relevance scores
+    // 4. Map citations — relevance only exists for real vector distances.
     const citations = relevantChunks.map((c) => ({
       documentId: c.documentId,
       snippet: c.contentChunk.slice(0, 150) + '...',
-      relevanceScore: Math.max(0, Math.round((1 - c.distance) * 100)),
+      relevanceScore:
+        c.distance === null
+          ? null
+          : Math.max(0, Math.round((1 - c.distance) * 100)),
     }));
 
     return {
       answer: completion.text,
+      retrievalMethod,
       citations,
     };
   }

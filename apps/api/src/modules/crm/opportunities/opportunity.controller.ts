@@ -65,6 +65,11 @@ export class OpportunityController {
         req.user!.organizationId,
         params.id,
         body,
+        // BUG FIX (#104, 2026-08-06): forward the authenticated actor so
+        // a drag-and-drop stage move can write its STATUS_CHANGE audit
+        // row with honest attribution (was: no actor on this path at
+        // all — the same gap class closed in BUG FIX #99 for tasks).
+        req.user!.id,
       );
 
     res.json({

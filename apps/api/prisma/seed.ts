@@ -1,12 +1,28 @@
 import { PrismaClient, TaskPriority, TaskStatus, ProjectStatus, Role, TeamRole, LeadStatus } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { assertSeedTargetSafe } from './seed-guard';
+
+const DEMO_ORGANIZATION_ID = '00000000-0000-4000-8000-000000000001';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  /*
+   * BUG FIX (#107, 2026-08-06): this script drops EVERY row in EVERY
+   * table below (19 un-scoped deleteMany calls) — not "seed records", as
+   * the old comment claimed while README offered only a docs-only
+   * "never run it against production" warning. The target is now
+   * verified BEFORE any write: production boot envs are refused outright,
+   * non-loopback targets require SEED_CONFIRM_DATABASE=<exact db name>
+   * (see seed-guard.ts). Localhost development stays zero-friction.
+   */
+  assertSeedTargetSafe(process.env);
+
   console.log('🌱 Starting database seed...');
 
-  // Clean existing seed records if present for idempotency
+  // Full wipe for idempotency: every row in every table is deleted.
+  // Guarded by assertSeedTargetSafe above — new destructive steps added
+  // here must stay BELOW that call.
   await prisma.aIUsageLog.deleteMany();
   await prisma.cRMActivity.deleteMany();
   await prisma.opportunity.deleteMany();
@@ -28,15 +44,18 @@ async function main() {
   await prisma.organization.deleteMany();
 
   // 1. Create Organization
+  // RELEASE 2026-08-07: the demo organization is exactly `akash4550`
+  // (slug passes the org slug rule ^[a-z0-9-]+$). Renamed from Acme Corp.
   const org = await prisma.organization.create({
     data: {
-      name: 'Acme Corp',
-      slug: 'acme-corp',
+      id: DEMO_ORGANIZATION_ID,
+      name: 'akash4550',
+      slug: 'akash4550',
       plan: 'PRO',
       subscriptionStatus: 'ACTIVE',
     },
   });
-  console.log(`Created Organization: ${org.name}`);
+  console.log(`Created Organization: ${org.name} (workspace ID: ${org.id})`);
 
   // 2. Create Users
   const hashedPassword = await bcrypt.hash('password123', 10);

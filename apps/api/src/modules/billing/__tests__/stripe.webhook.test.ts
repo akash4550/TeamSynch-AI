@@ -108,7 +108,11 @@ describe('Stripe Webhook Signature Verification Tests', () => {
       json: jest.fn(),
     };
 
-    jest.spyOn(StripeBillingService.prototype, 'handleWebhookEvent').mockResolvedValueOnce();
+    // TOOLCHAIN REPIN (ledger #13 — 2026-08-05): ledger #10 gave
+    // handleWebhookEvent a `{ duplicate }` result (idempotency ledger) —
+    // the bare mockResolvedValueOnce() no longer satisfies the return type.
+    // The controller ignores the value either way.
+    jest.spyOn(StripeBillingService.prototype, 'handleWebhookEvent').mockResolvedValueOnce({ duplicate: false });
 
     await billingController.handleWebhook(req, res);
 

@@ -37,9 +37,13 @@ describe('AIService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    // TOOLCHAIN REPIN (ledger #13 — 2026-08-05): ledger #9 added
+    // generateEmbedding to the AIProvider contract (real RAG embeddings).
+    // The two literal mocks below now implement the full interface.
     providerMock = {
       name: 'mock',
       generateCompletion: jest.fn(),
+      generateEmbedding: jest.fn(),
     };
 
     usageCreateMock =
@@ -328,6 +332,7 @@ describe('AIService', () => {
     providerMock = {
       name: 'unsupported-provider',
       generateCompletion: jest.fn(),
+      generateEmbedding: jest.fn(),
     };
 
     service = new AIService(providerMock);

@@ -19,6 +19,8 @@ import {
   listUsersSchema,
 } from './user.validator';
 
+import { requireEntitlement } from '../../core/middlewares/requireEntitlement';
+
 import { PERMISSIONS } from '../../core/auth/permissions';
 
 
@@ -70,11 +72,24 @@ router.get(
 
 
 
+/*
+
+ * BUG FIX (#49 — USER plan quota never enforced): EntitlementService fully
+ * implements the per-plan `maxUsers` gate (FREE=5, STARTER=15, PRO=50,
+ * BUSINESS=500) and the usage bars on SubscriptionSettingsPage read the
+ * same counts — but `requireEntitlement` was mounted ONLY on
+ * POST /projects, so POST /users skirted the limit entirely: a FREE org
+ * could create unlimited seats while the billing page displayed
+ * fabricated-limit usage bars (the counters worked; the gate just never
+ * ran). Mirrors the exact chain order of project.routes.ts.
+ */
 router.post(
 
   '/',
 
   requirePermission(PERMISSIONS.USER.CREATE),
+
+  requireEntitlement('USER'),
 
   validateRequest(createUserSchema),
 

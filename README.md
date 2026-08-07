@@ -27,6 +27,7 @@ The hosted application is a portfolio demonstration environment. Demo access is 
 - Team membership and invitation management
 - CRM clients, contacts, leads, opportunities, and pipelines
 - Document and calendar modules
+- AI workspace assistant with retrieval-augmented generation over indexed documents
 - Analytics and organization administration
 - Stripe webhook verification and billing entitlement checks
 - Redis and BullMQ background processing
@@ -168,11 +169,22 @@ Application flow:
 
 3. Install dependencies:
 
-   `npm install`
+   `npm ci`
+
+   > Dependency hygiene (2026-08-05): the committed `package-lock.json`
+   > carries hand-grafted entries — platform bindings npm's Windows lock
+   > bug drops (ledger #13) and hand-verified add-ons (ledger #14). Always
+   > install with `npm ci`. To ADD a dependency, do NOT run
+   > `npm install <pkg> --workspace=...`: npm rewrites the ideal tree on
+   > peer rules and has physically pruned `apps/web/node_modules` while
+   > leaving the lock intact (verified 2026-08-05 — web toolchain died).
+   > Instead: add the manifest entry, splice the resolved package entries
+   > into the lock (see the graft technique used for ledger #13/#14), then
+   > `npm ci` and re-run the full API + web test battery.
 
 4. Copy the environment example:
 
-   `cp .env.example .env`
+   `cp apps/api/.env.example apps/api/.env`
 
 5. Start PostgreSQL and Redis:
 
@@ -182,13 +194,16 @@ Application flow:
 
    `npm run generate --workspace apps/api`
 
-7. Apply the local database schema:
+7. Apply the committed database migrations:
 
-   `npm run db:push --workspace apps/api`
+   `npm run migrate:deploy --workspace apps/api`
 
 8. Seed demonstration data:
 
    `npm run seed --workspace apps/api`
+
+   Demo sign-in: workspace `00000000-0000-4000-8000-000000000001`,
+   email `demo@teamsynch-ai.com`, password `password123`.
 
 9. Start the development servers:
 
@@ -199,7 +214,7 @@ Default development addresses:
 - Web application: `http://localhost:5173`
 - API service: `http://localhost:4000`
 
-The seed command resets demonstration data. Never run it against a production database.
+The seed command wipes **every row in every table**, then inserts demonstration data. Since 2026-08-06 (BUG FIX #107) this is enforced, not just documented: the script refuses to run when `NODE_ENV=production`, and against any non-loopback database host it exits unless you pass `SEED_CONFIRM_DATABASE=<exact database name>`. Localhost development needs no confirmation.
 
 ## Testing
 
@@ -215,9 +230,13 @@ Frontend tests:
 
 `npm test --workspace apps/web`
 
-Backend tests:
+Backend unit tests (DB-free gate — no Postgres/Redis required):
 
-`npm test --workspace apps/api -- --runInBand`
+`npm test --workspace apps/api`
+
+Backend integration suites (boot the full app; require PostgreSQL on `127.0.0.1:55433` and Redis on `127.0.0.1:56379` — see `apps/api/src/test/setup-env.ts`):
+
+`npm run test:integration --workspace apps/api`
 
 Complete production build:
 
@@ -225,13 +244,13 @@ Complete production build:
 
 ## Current Verified Baseline
 
-The current main branch has passed:
+The current main branch works against this verified baseline (updated 2026-08-07):
 
 - Frontend TypeScript validation
 - Backend TypeScript validation
-- 18 frontend tests
-- 383 backend tests across 39 test suites
-- 3 team invitation security integration tests
+- 147 frontend tests across 29 test files (Vitest)
+- 270 backend tests across 41 test suites (Jest DB-free unit gate)
+- Team invitation and tenant-isolation security integration tests (CI)
 - Full production build
 - GitHub Actions CI
 - CodeQL analysis
@@ -284,7 +303,6 @@ This repository is a portfolio-quality SaaS implementation and demonstration env
 Current limitations include:
 
 - AI, email, OAuth, Stripe, and object-storage features require valid provider configuration.
-- Some team-detail controls still require complete frontend mutation workflows.
 - Background workers currently execute within the API process.
 - Production should use one API replica until workers are separated or leader election is implemented.
 - Demonstration data may be reset.

@@ -63,3 +63,19 @@ export const allQueues = [
   aiQueue,
   maintenanceQueue
 ];
+
+/*
+ * TEST SUPPORT + SHUTDOWN HYGIENE (ledger #13 — 2026-08-05): every Queue
+ * constructor issues an INFO against the shared client, spawning duplicate
+ * ioredis connections with their own retry loops. In jest — where each
+ * suite file re-imports this module into a fresh registry — those
+ * duplicates accumulated (~7 per suite) until the runner ground to a
+ * halt. The per-suite teardown (src/test/teardown-handles.ts) invokes
+ * closeAllQueues() via a require.cache probe ONLY when this module was
+ * actually loaded by that suite, before disconnecting the shared client.
+ * Server shutdown paths may reuse it to drain queues alongside
+ * stopWorkers(). allSettled: one wedged queue must not block the rest.
+ */
+export const closeAllQueues = async (): Promise<void> => {
+  await Promise.allSettled(allQueues.map((queue) => queue.close()));
+};

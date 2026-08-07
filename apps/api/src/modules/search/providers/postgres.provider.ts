@@ -49,20 +49,37 @@ export class PostgresSearchProvider implements SearchProvider {
     const queryLimit = offset + limit;
     const searches: Promise<SearchResultItem[]>[] = [];
 
-    const formattedTerm = term.trim().replace(/'/g, "''");
+    /*
+     * BUG FIX (#52 — search terms were mangled before binding): the old
+     * line SQL-escaped apostrophes ('' doubling) even though the value
+     * travels as a BOUND parameter, not interpolated text — so searching
+     * a real apostrophe name ("O'Brien", "D'Souza") looked for two
+     * consecutive quotes and matched nothing. And the ILIKE fallback ran
+     * with raw user text, so `%` and `_` acted as wildcards: a document
+     * named report_2024.pdf was unfindable by its literal name (and "50%"
+     * matched any digits). websearch_to_tsquery wants the RAW term; ILIKE
+     * wants the term with LIKE metacharacters backslash-escaped
+     * (PostgreSQL's default LIKE escape). Quote-doubling is removed
+     * entirely: parameters are never string-interpolated.
+     */
+    const searchTerm = term.trim();
+    const likePattern = `%${searchTerm
+      .replace(/\\/g, '\\\\')
+      .replace(/%/g, '\\%')
+      .replace(/_/g, '\\_')}%`;
 
     // Native PostgreSQL Full-Text Search using websearch_to_tsquery
     if (searchableModules.includes('projects')) {
       searches.push(
         prisma.$queryRaw<any[]>`
           SELECT id, name AS title, COALESCE(description, '') AS description,
-                 ts_rank(to_tsvector('english', name || ' ' || COALESCE(description, '')), websearch_to_tsquery('english', ${formattedTerm})) AS score
+                 ts_rank(to_tsvector('english', name || ' ' || COALESCE(description, '')), websearch_to_tsquery('english', ${searchTerm})) AS score
           FROM "Project"
           WHERE "organizationId" = ${organizationId}
             AND "deletedAt" IS NULL
             AND (
-              to_tsvector('english', name || ' ' || COALESCE(description, '')) @@ websearch_to_tsquery('english', ${formattedTerm})
-              OR name ILIKE ${'%' + formattedTerm + '%'}
+              to_tsvector('english', name || ' ' || COALESCE(description, '')) @@ websearch_to_tsquery('english', ${searchTerm})
+              OR name ILIKE ${likePattern}
             )
           ORDER BY score DESC
           LIMIT ${queryLimit}
@@ -83,13 +100,13 @@ export class PostgresSearchProvider implements SearchProvider {
       searches.push(
         prisma.$queryRaw<any[]>`
           SELECT id, title, COALESCE(description, '') AS description,
-                 ts_rank(to_tsvector('english', title || ' ' || COALESCE(description, '')), websearch_to_tsquery('english', ${formattedTerm})) AS score
+                 ts_rank(to_tsvector('english', title || ' ' || COALESCE(description, '')), websearch_to_tsquery('english', ${searchTerm})) AS score
           FROM "Task"
           WHERE "organizationId" = ${organizationId}
             AND "deletedAt" IS NULL
             AND (
-              to_tsvector('english', title || ' ' || COALESCE(description, '')) @@ websearch_to_tsquery('english', ${formattedTerm})
-              OR title ILIKE ${'%' + formattedTerm + '%'}
+              to_tsvector('english', title || ' ' || COALESCE(description, '')) @@ websearch_to_tsquery('english', ${searchTerm})
+              OR title ILIKE ${likePattern}
             )
           ORDER BY score DESC
           LIMIT ${queryLimit}
@@ -110,13 +127,13 @@ export class PostgresSearchProvider implements SearchProvider {
       searches.push(
         prisma.$queryRaw<any[]>`
           SELECT id, name AS title, COALESCE(industry, 'Client') AS description,
-                 ts_rank(to_tsvector('english', name || ' ' || COALESCE(industry, '')), websearch_to_tsquery('english', ${formattedTerm})) AS score
+                 ts_rank(to_tsvector('english', name || ' ' || COALESCE(industry, '')), websearch_to_tsquery('english', ${searchTerm})) AS score
           FROM "Client"
           WHERE "organizationId" = ${organizationId}
             AND "deletedAt" IS NULL
             AND (
-              to_tsvector('english', name || ' ' || COALESCE(industry, '')) @@ websearch_to_tsquery('english', ${formattedTerm})
-              OR name ILIKE ${'%' + formattedTerm + '%'}
+              to_tsvector('english', name || ' ' || COALESCE(industry, '')) @@ websearch_to_tsquery('english', ${searchTerm})
+              OR name ILIKE ${likePattern}
             )
           ORDER BY score DESC
           LIMIT ${queryLimit}
@@ -135,13 +152,13 @@ export class PostgresSearchProvider implements SearchProvider {
       searches.push(
         prisma.$queryRaw<any[]>`
           SELECT id, title, COALESCE(source, 'Lead') AS description,
-                 ts_rank(to_tsvector('english', title || ' ' || COALESCE(source, '')), websearch_to_tsquery('english', ${formattedTerm})) AS score
+                 ts_rank(to_tsvector('english', title || ' ' || COALESCE(source, '')), websearch_to_tsquery('english', ${searchTerm})) AS score
           FROM "Lead"
           WHERE "organizationId" = ${organizationId}
             AND "deletedAt" IS NULL
             AND (
-              to_tsvector('english', title || ' ' || COALESCE(source, '')) @@ websearch_to_tsquery('english', ${formattedTerm})
-              OR title ILIKE ${'%' + formattedTerm + '%'}
+              to_tsvector('english', title || ' ' || COALESCE(source, '')) @@ websearch_to_tsquery('english', ${searchTerm})
+              OR title ILIKE ${likePattern}
             )
           ORDER BY score DESC
           LIMIT ${queryLimit}
@@ -151,7 +168,16 @@ export class PostgresSearchProvider implements SearchProvider {
             module: 'crm',
             title: r.title,
             description: `Lead from ${r.description}`,
-            url: `/crm/leads/${r.id}`,
+            /*
+             * BUG FIX (lead results dead-ended on 404): this URL pointed at
+             * `/crm/leads/:id`, but the web app has no lead detail route —
+             * clicking any lead result in Global Search landed on the
+             * NotFound error page. Land on the Leads list itself (searchable
+             * and filterable), exactly like the projects (`/projects`),
+             * tasks (`/tasks`), and documents (`/documents`) result groups
+             * already do.
+             */
+            url: `/crm/leads`,
             score: Number(r.score) || 0.5,
           }))
         )
@@ -162,13 +188,13 @@ export class PostgresSearchProvider implements SearchProvider {
       searches.push(
         prisma.$queryRaw<any[]>`
           SELECT id, "fileName" AS title, "storageProvider" AS description,
-                 ts_rank(to_tsvector('english', "fileName" || ' ' || "originalName"), websearch_to_tsquery('english', ${formattedTerm})) AS score
+                 ts_rank(to_tsvector('english', "fileName" || ' ' || "originalName"), websearch_to_tsquery('english', ${searchTerm})) AS score
           FROM "Document"
           WHERE "organizationId" = ${organizationId}
             AND "deletedAt" IS NULL
             AND (
-              to_tsvector('english', "fileName" || ' ' || "originalName") @@ websearch_to_tsquery('english', ${formattedTerm})
-              OR "fileName" ILIKE ${'%' + formattedTerm + '%'}
+              to_tsvector('english', "fileName" || ' ' || "originalName") @@ websearch_to_tsquery('english', ${searchTerm})
+              OR "fileName" ILIKE ${likePattern}
             )
           ORDER BY score DESC
           LIMIT ${queryLimit}

@@ -1,4 +1,4 @@
-﻿import Redis from 'ioredis';
+import Redis from 'ioredis';
 import { env } from '../../config/env';
 
 let redisClient: Redis | null = null;
@@ -29,6 +29,12 @@ export const getRedisClient = (): Redis => {
 
   return redisClient;
 };
+
+/** TEST SUPPORT (ledger #13 — 2026-08-05): non-constructing probe so the
+ * jest teardown can close an existing client WITHOUT instantiating one for
+ * suites that never touched Redis (calling getRedisClient() there would
+ * create a handle purely to then close it). */
+export const getExistingRedisClient = (): Redis | null => redisClient;
 
 export const closeRedisClient = async (): Promise<void> => {
   if (!redisClient) {

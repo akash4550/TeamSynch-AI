@@ -155,8 +155,59 @@ export class CRMPipelineService {
     return stage;
   }
 
+  /*
+   * BUG FIX (#62 — deleting an in-use stage exploded as a generic 500):
+   * `Opportunity.stage → PipelineStage` is a RESTRICT foreign key
+   * (schema.prisma declares no onDelete action), and Opportunities are only
+   * ever SOFT-deleted — physically referencing rows remain even after an
+   * opportunity is "deleted". The old code hard-deleted the stage blindly;
+   * for ANY referencing row (live or historical) Postgres rejected it with
+   * Prisma P2003, which surfaced through errorMiddleware as an opaque
+   * 500 'An unexpected error occurred' — the admin got no hint that the
+   * resolution was to move opportunities out of the stage first. Now we
+   * check FIRST and answer honestly: 409 naming the live count when active
+   * opportunities sit in the stage; 409 explaining historical references
+   * when only soft-deleted rows remain (purging history is destructive and
+   * this endpoint deliberately does not perform it); plus a P2003 safety
+   * net for the TOCTOU race (an opportunity moved INTO the stage between
+   * the check and the delete), so the raw constraint error can never
+   * escape as a 500. The PipelineStageDeleted event still fires only on a
+   * successful delete, exactly as before.
+   */
   async deleteStage(organizationId: string, id: string) {
-    await this.repository.delete(id, organizationId);
+    const referencing = await this.repository.countReferencingOpportunities(id, organizationId);
+
+    if (referencing.live > 0) {
+      throw new AppError(
+        `Cannot delete pipeline stage: ${referencing.live} active ${
+          referencing.live === 1 ? 'opportunity still sits' : 'opportunities still sit'
+        } in it. Move them to another stage first.`,
+        409,
+      );
+    }
+
+    if (referencing.total > 0) {
+      throw new AppError(
+        `Cannot delete pipeline stage: ${referencing.total} previously deleted opportunity ${
+          referencing.total === 1 ? 'record still references' : 'records still reference'
+        } it. Historical records cannot be purged from this endpoint.`,
+        409,
+      );
+    }
+
+    try {
+      await this.repository.delete(id, organizationId);
+    } catch (error: any) {
+      if (error?.code === 'P2003') {
+        // TOCTOU: an opportunity was linked between the check and the delete.
+        throw new AppError(
+          'Cannot delete pipeline stage: opportunities are linked to it. Move them to another stage first.',
+          409,
+        );
+      }
+      throw error;
+    }
+
     eventBus.emitEvent('PipelineStageDeleted', { organizationId, stageId: id });
   }
 

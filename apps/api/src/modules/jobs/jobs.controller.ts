@@ -81,4 +81,53 @@ export class JobsController {
       next(error);
     }
   }
+
+  /*
+   * BUG FIX (#57 — checkStatusUrl was a dead pointer): four async-job
+   * producers hand the caller `checkStatusUrl: /api/v1/jobs/${job.id}` in
+   * their 202 responses (AI task-summary + assistant, audit-log export,
+   * calendar two-way sync), but no GET /jobs/:id route ever existed —
+   * following the URL always returned 404, even while the referenced job
+   * was queued or running. BullMQ job ids are unique PER QUEUE, not
+   * globally, so a status lookup must probe every registered queue for
+   * the id. Response keeps the module's `{ data: ... }` convention and
+   * mirrors the field set of GET /failed/:queueName, plus live status,
+   * attempts and lifecycle timestamps; unknown ids return the module's
+   * existing `{ message }` 404 shape (dual-shape readers, pinned by the
+   * #37 error-state tests).
+   */
+  async getJobById(req: Request, res: Response, next: NextFunction) {
+    try {
+      // Express 5 types params as string | string[]; for a single-segment
+      // ':id' route it is always a string at runtime.
+      const id = req.params.id as string;
+      const matches = await Promise.all(allQueues.map((queue) => queue.getJob(id)));
+      const job = matches.find((candidate) => candidate != null);
+
+      if (!job) {
+        return res.status(404).json({ message: 'Job not found' });
+      }
+
+      const status = await job.getState();
+
+      res.status(200).json({
+        data: {
+          id: job.id,
+          name: job.name,
+          queue: job.queueName,
+          status,
+          progress: job.progress,
+          attemptsMade: job.attemptsMade,
+          data: job.data,
+          failedReason: job.failedReason,
+          stacktrace: job.stacktrace,
+          timestamp: job.timestamp,
+          processedOn: job.processedOn,
+          finishedOn: job.finishedOn,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

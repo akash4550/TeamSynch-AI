@@ -98,12 +98,14 @@ plan String?
   opportunities   Opportunity[]
   crmActivities   CRMActivity[]
   documents       Document[]
+  embeddings      DocumentEmbedding[]
   notifications   Notification[]
   activityLogs    ActivityLog[]
   tasks           Task[]
   events          CalendarEvent[]
   teamInvitations TeamInvitation[]
   AIUsageLog      AIUsageLog[]
+  calendarAccounts CalendarAccount[]
 
   @@index([deletedAt])
   @@index([isActive])
@@ -138,6 +140,8 @@ model User {
   organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   refreshTokens     RefreshToken[]
+
+  calendarAccounts  CalendarAccount[]
 
   ownedProjects     Project[]
 
@@ -502,6 +506,39 @@ model CalendarEvent {
   @@index([organizationId])
 }
 
+// FEATURE (ledger #3, 2026-08-05 — real calendar OAuth + persistence):
+// the old flow fabricated tokens/emails and crammed orgId-only CalendarEvent
+// shell rows instead of persisting an account. This is the real account
+// store: one row per (org, user, provider), AES-256-GCM-encrypted tokens
+// at rest (encryption.util), real account email from the provider's
+// id_token, and provider-reported token expiry for future refresh flows.
+enum CalendarProvider {
+  GOOGLE
+  OUTLOOK
+}
+
+model CalendarAccount {
+  id                   String           @id @default(uuid())
+  organizationId       String
+  userId               String
+  provider             CalendarProvider
+  email                String
+  accessToken          String           @db.Text
+  refreshToken         String?          @db.Text
+  accessTokenExpiresAt DateTime
+  scopes               String?
+  lastSyncedAt         DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, provider])
+  @@index([organizationId])
+  @@index([userId])
+}
+
 model Notification {
   id             String           @id @default(uuid())
   organizationId String
@@ -546,6 +583,17 @@ model ActivityLog {
   @@index([entityType, entityId])
 }
 
+// FEATURE (ledger #15 — 2026-08-05): terminal RAG ingestion outcomes.
+// Values mirror RagIngestResult.status 1:1 so the processor needs no
+// mapping; 'not_processed' exists ONLY for the #15 backfill of rows
+// uploaded before outcome tracking shipped.
+enum DocumentIngestStatus {
+  ingested
+  partial_budget
+  skipped
+  not_processed
+}
+
 model Document {
   id               String   @id @default(uuid())
   organizationId   String
@@ -568,6 +616,15 @@ model Document {
 
   parentDocumentId String?
 
+  // FEATURE (ledger #15 — 2026-08-05): outcome of the LAST terminal RAG
+  // ingestion pass for this row (rag-ingestion.processor is the only
+  // writer). null = never tracked here (fresh upload, job pending). All
+  // three fields are updated together per pass; ingestReason is UI-safe
+  // (never document content) and CLEARED on a successful pass.
+  ingestStatus DocumentIngestStatus?
+  ingestedAt   DateTime?
+  ingestReason String?
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   deletedAt        DateTime?
@@ -577,6 +634,10 @@ model Document {
   task           Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
   uploadedBy     User @relation(fields: [uploadedById], references: [id])
   parentDocument Document? @relation("DocumentVersions", fields: [parentDocumentId], references: [id])
+
+  // FEATURE (ledger #9): RAG embedding chunks — cascade on hard delete;
+  // soft-delete wipes happen in DocumentService.deleteDocument.
+  embeddings     DocumentEmbedding[]
   versions       Document[] @relation("DocumentVersions")
 
   @@index([organizationId, isLatest])
@@ -615,4 +676,83 @@ model AIUsageLog {
   @@index([organizationId, feature])
   @@index([organizationId, createdAt])
   @@index([requestId])
+}
+
+// FEATURE (ledger #9 — 2026-08-05): pgvector storage for the RAG ingestion
+// pipeline. Every row is one ~1000-char overlapping chunk of an ingested
+// document with its REAL provider embedding (OpenAI text-embedding-3-small
+// by default, 1536 dims — keep the column width in lockstep with
+// AI_EMBEDDING_MODEL if swapped). Two retrieval modes consume this table:
+//   1. vector cosine (`embedding <=> query`) via the HNSW index, and
+//   2. the HONEST lexical fallback (ledger #9): pg_trgm word_similarity /
+// ILIKE over contentChunk + the pg-generated `searchText` tsvector column
+//     when pgvector isn't provisioned — distances are NULL (never a
+//     fabricated 0.2 → "80% Match") with retrievalMethod='text_fallback'.
+// Provisioning SQL lives in prisma/migrations/20260805010000_document_embeddings
+// (HNSW + pg_trgm GIN + GIN tsvector indexes, CREATE EXTENSION guarded).
+// Rows hard-delete with their document (uploadNewVersion / deleteDocument
+// wipe first); a security sweep can purge per-tenant via
+// VectorService.deleteChunksForOrganization.
+model DocumentEmbedding {
+  id             String   @id @default(uuid())
+  organizationId String
+  documentId     String?
+  taskId         String?
+  projectId      String?
+  contentChunk   String   @db.Text
+  // FEATURE (ledger #16 — 2026-08-05): sha256 hex of contentChunk, written
+  // by VectorService.storeVectorChunk for every new row. Enables zero-spend
+  // reuse of byte-identical chunks (re-point / copy-insert instead of a
+  // fresh provider call). Nullable: pre-#16 rows are backfilled by the
+  // migration via SQL digest over contentChunk.
+  chunkHash      String?
+  embedding      Unsupported("vector(1536)")?
+  // pg-generated tsvector over contentChunk (migration-only; Prisma reads
+  // it as an Unsupported column with a db-generated default).
+  searchText     Unsupported("tsvector")? @default(dbgenerated("to_tsvector('english', \"contentChunk\")"))
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  document     Document?    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([documentId])
+  // FEATURE (ledger #16): dedupe pool lookup is org-scoped by hash.
+  @@index([organizationId, chunkHash])
+  // NOTE: the contentChunk GIN trigram index (gin_trgm_ops) is
+  // migration-only — Prisma 5's @@index has no `ops` argument (P1012); see
+  // migrations/20260805010000_document_embeddings/migration.sql.
+}
+// FEATURE (ledger #10 — 2026-08-05): webhook side-effect idempotency.
+// Stripe retries every non-2xx (and replays from the Dashboard) within ~3
+// days of the first attempt; before this table the webhook handler ran its
+// side effects (org plan update, realtime broadcast, SEND_BILLING_RECEIPT
+// email, ProjectUpdated audit row) on EVERY delivery — duplicate receipt
+// emails and duplicate audit entries for one genuine event. The
+// (provider, eventId) unique key makes the claim atomic: the first
+// delivery inserts a PROCESSING row; retries see PROCESSED (skip, 200) or
+// FAILED/stale-PROCESSING (guarded re-claim, attempts incremented). See
+// StripeBillingService.handleWebhookEvent. Payloads are intentionally not
+// stored — the Stripe Dashboard holds them; this is a claim ledger, not an
+// event archive.
+enum WebhookEventStatus {
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model WebhookEvent {
+  id              String             @id @default(uuid())
+  provider        String
+  eventId         String
+  eventType       String
+  status          WebhookEventStatus @default(PROCESSING)
+  attempts        Int                @default(1)
+  lastError       String?            @db.Text
+  processedAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([provider, eventId])
+  @@index([provider, status])
 }

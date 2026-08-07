@@ -35,6 +35,8 @@ const UserManagement = lazy(() => import('./features/users/UserManagement').then
 const AnalyticsLayout = lazy(() => import('./features/analytics/AnalyticsLayout').then((m) => ({ default: m.AnalyticsLayout })));
 const JobsDashboard = lazy(() => import('./features/system/JobsDashboard').then((m) => ({ default: m.JobsDashboard })));
 const SearchResultsPage = lazy(() => import('./features/search/SearchResultsPage').then((m) => ({ default: m.SearchResultsPage })));
+// FEATURE (ledger #1): public invitation-accept landing (token in query string)
+const AcceptInvitationPage = lazy(() => import('./features/auth/AcceptInvitationPage').then((m) => ({ default: m.AcceptInvitationPage })));
 
 /**
  * Lightweight Page Suspense Fallback Skeleton
@@ -63,6 +65,8 @@ function App() {
                 <Routes>
                   <Route path="/" element={<LandingPage />} />
                   <Route path="/login" element={<LoginPage />} />
+                  {/* FEATURE (ledger #1): public invitation-accept route — deliberately OUTSIDE ProtectedRoute (the token is the credential) */}
+                  <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
                 
                   {/* Protected Application Routes */}
                   <Route element={<ProtectedRoute />}>

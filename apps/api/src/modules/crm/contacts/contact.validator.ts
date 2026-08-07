@@ -31,7 +31,10 @@ const updateContactBodySchema = createContactBodySchema
 const contactQuerySchema = z
   .object({
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(100).default(10),
+    // FEATURE (ledger #6, 2026-08-05 — aggregate exception list @500):
+    // aggregate/dropdown-consumed list raised from 100 (browse lists keep
+    // 100); the UI declares truncation when total exceeds the fetched set.
+    limit: z.coerce.number().int().min(1).max(500).default(10),
     clientId: z.string().uuid('Client ID must be a valid UUID').optional(),
     search: z.string().trim().min(1).max(255).optional(),
     sortBy: z.enum(['firstName', 'createdAt']).default('createdAt'),

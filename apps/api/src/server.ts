@@ -4,6 +4,8 @@ import { initializeSocket, getIO } from './modules/realtime/socket';
 import { RealtimeService } from './modules/realtime/realtime.service';
 import { prisma } from './config/prisma';
 import { getRedisClient } from './core/redis/redis.client';
+import { stopWorkers } from './modules/jobs/workers'; // BUG FIX (#77): graceful worker drain
+import { auditSubscriber } from './modules/audit/audit.subscriber'; // QUEUED ITEM #12: audit write coverage
 import { Server as HttpServer } from 'node:http';
 
 const PORT = process.env.PORT || 4000;
@@ -21,6 +23,10 @@ httpServer = app.listen(PORT, () => {
   // Attach EventBus listeners
   const realtimeService = new RealtimeService();
   realtimeService.initializeListeners();
+
+  // QUEUED ITEM #12: map domain events → ActivityLog rows (was: the audit
+  // trail recorded only user role changes; see audit.subscriber.ts).
+  auditSubscriber.initializeListeners();
 });
 
 let isShuttingDown = false;
@@ -52,7 +58,21 @@ async function handleGracefulShutdown(signal: string) {
       });
     }
 
-    // 2. Disconnect active Socket.IO WebSocket clients
+    // 2. Drain background workers BEFORE touching Socket.IO / Redis /
+    // Prisma (BUG FIX #77 — previously dead stopWorkers, never invoked):
+    // worker.close() stops fetching new jobs and lets the CURRENT job of
+    // each worker finish — in-flight processors still need Redis (queue
+    // state), Prisma (queries) and live sockets (completion events like
+    // audit.export.completed) to land cleanly. Bounded by the same 15s
+    // force-exit safety net above.
+    try {
+      await stopWorkers();
+      logger.info('Background workers stopped. In-flight jobs drained.');
+    } catch (e) {
+      logger.warn('Error stopping background workers (continuing shutdown):', e);
+    }
+
+    // 3. Disconnect active Socket.IO WebSocket clients
     try {
       const io = getIO();
       await new Promise<void>((resolve) => {
@@ -65,7 +85,7 @@ async function handleGracefulShutdown(signal: string) {
       logger.warn('Socket.IO was not active or failed to close cleanly:', e);
     }
 
-    // 3. Close Redis connection
+    // 4. Close Redis connection
     try {
       const redis = getRedisClient();
       if (redis.status === 'ready' || redis.status === 'connect') {
@@ -76,7 +96,7 @@ async function handleGracefulShutdown(signal: string) {
       logger.warn('Error closing Redis connection:', e);
     }
 
-    // 4. Disconnect Prisma database client
+    // 5. Disconnect Prisma database client
     try {
       await prisma.$disconnect();
       logger.info('Prisma database client disconnected gracefully.');

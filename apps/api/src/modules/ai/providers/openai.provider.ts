@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import {
   AICompletionRequest,
   AICompletionResponse,
+  AIEmbeddingResponse,
   AIProvider,
 } from './ai-provider.interface';
 import { AIProviderError } from './ai-provider.error';
@@ -11,6 +12,12 @@ export interface OpenAIProviderOptions {
   model: string;
   timeoutMs: number;
   maxOutputTokens: number;
+  // FEATURE (ledger #9): chat model and embedding model are configured
+  // independently (completions and embeddings are different endpoints);
+  // baseURL makes the provider OpenAI-compatible-server friendly
+  // (Ollama/vLLM/LiteLLM gateways).
+  embeddingModel?: string;
+  baseURL?: string;
 }
 
 export class OpenAIProvider implements AIProvider {
@@ -18,6 +25,7 @@ export class OpenAIProvider implements AIProvider {
 
   private readonly client: OpenAI;
   private readonly model: string;
+  private readonly embeddingModel: string;
   private readonly maxOutputTokens: number;
 
   constructor(options: OpenAIProviderOptions) {
@@ -26,10 +34,39 @@ export class OpenAIProvider implements AIProvider {
       timeout: options.timeoutMs,
       maxRetries: 2,
       logLevel: 'off',
+      ...(options.baseURL ? { baseURL: options.baseURL } : {}),
     });
 
     this.model = options.model;
+    // Default must stay in lockstep with the pgvector column width
+    // (vector(1536)) — see prisma/migrations/20260805010000.
+    this.embeddingModel = options.embeddingModel ?? 'text-embedding-3-small';
     this.maxOutputTokens = options.maxOutputTokens;
+  }
+
+  /*
+   * FEATURE (ledger #9): REAL embeddings via the official endpoint —
+   * replaces AIService's `Math.sin(seed+i)*0.05` pseudo-vectors. Token
+   * usage rides the API response and is logged by AIService for the
+   * per-org monthly RAG budget (AI_RAG_MONTHLY_TOKEN_BUDGET).
+   */
+  async generateEmbedding(text: string): Promise<AIEmbeddingResponse> {
+    try {
+      const response = await this.client.embeddings.create({
+        model: this.embeddingModel,
+        input: text,
+      });
+
+      return {
+        embedding: response.data[0]?.embedding ?? [],
+        model: response.model,
+        usage: {
+          totalTokens: response.usage?.total_tokens ?? 0,
+        },
+      };
+    } catch (error: unknown) {
+      throw this.normalizeError(error);
+    }
   }
 
   async generateCompletion(

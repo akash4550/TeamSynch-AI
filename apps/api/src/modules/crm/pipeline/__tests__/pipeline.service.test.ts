@@ -216,7 +216,16 @@ describe('PipelineStageService', () => {
   });
 
   describe('deleteStage', () => {
+    // TOOLCHAIN REPIN (ledger #13 — 2026-08-05): the FK-reference guard
+    // (BUG FIX #62-ish era — countReferencingOpportunities + honest 409s
+    // + P2003 TOCTOU net) shipped after this suite last ran, and jest's
+    // auto-mock returned `undefined` for the new method, exploding the
+    // service at `referencing.live`. The guard scenarios are now stubbed
+    // AND pinned below so the guard can never silently rot away again.
     it('deletes a tenant-scoped stage and emits an event', async () => {
+      repositoryMock.countReferencingOpportunities = jest
+        .fn()
+        .mockResolvedValue({ live: 0, total: 0 });
       repositoryMock.delete.mockResolvedValue();
 
       await service.deleteStage(
@@ -239,6 +248,9 @@ describe('PipelineStageService', () => {
     });
 
     it('does not emit an event when deletion fails', async () => {
+      repositoryMock.countReferencingOpportunities = jest
+        .fn()
+        .mockResolvedValue({ live: 0, total: 0 });
       repositoryMock.delete.mockRejectedValue(
         new Error('Pipeline stage not found'),
       );
@@ -246,6 +258,45 @@ describe('PipelineStageService', () => {
       await expect(
         service.deleteStage('org-1', 'stage-1'),
       ).rejects.toThrow('Pipeline stage not found');
+
+      expect(eventBus.emitEvent).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete a stage with LIVE opportunities (honest 409)', async () => {
+      repositoryMock.countReferencingOpportunities = jest
+        .fn()
+        .mockResolvedValue({ live: 2, total: 2 });
+
+      await expect(
+        service.deleteStage('org-1', 'stage-1'),
+      ).rejects.toThrow('2 active opportunities still sit');
+
+      expect(repositoryMock.delete).not.toHaveBeenCalled();
+      expect(eventBus.emitEvent).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete a stage referenced only by deleted opportunities (honest 409)', async () => {
+      repositoryMock.countReferencingOpportunities = jest
+        .fn()
+        .mockResolvedValue({ live: 0, total: 1 });
+
+      await expect(
+        service.deleteStage('org-1', 'stage-1'),
+      ).rejects.toThrow('previously deleted opportunity record still references');
+
+      expect(repositoryMock.delete).not.toHaveBeenCalled();
+      expect(eventBus.emitEvent).not.toHaveBeenCalled();
+    });
+
+    it('maps the P2003 TOCTOU race to a 409 instead of a raw 500', async () => {
+      repositoryMock.countReferencingOpportunities = jest
+        .fn()
+        .mockResolvedValue({ live: 0, total: 0 });
+      repositoryMock.delete.mockRejectedValue({ code: 'P2003' });
+
+      await expect(
+        service.deleteStage('org-1', 'stage-1'),
+      ).rejects.toThrow('opportunities are linked to it');
 
       expect(eventBus.emitEvent).not.toHaveBeenCalled();
     });

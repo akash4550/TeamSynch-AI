@@ -85,6 +85,13 @@ jobs:
       SMOKE_WEB_URL: http://127.0.0.1:18080
       JWT_ACCESS_SECRET: ci-production-access-secret-change-me
       JWT_REFRESH_SECRET: ci-production-refresh-secret-change-me
+      # BUG FIX (#109, 2026-08-06): #106 made this variable mandatory for
+      # any production boot — including this job's isolated production
+      # topology — and docker-compose.production.yml's :? interpolation
+      # turns its absence into a COMPOSE-TIME error. CI-only value, never
+      # a real secret, ≥32 chars and distinct from the JWT values, exactly
+      # like the placeholders beside it.
+      ENCRYPTION_SECRET_KEY: ci-production-encryption-secret-change-me
       FRONTEND_URL: http://127.0.0.1:18080
       AI_PROVIDER: OPENAI
       AI_MODEL: ci-openai-model

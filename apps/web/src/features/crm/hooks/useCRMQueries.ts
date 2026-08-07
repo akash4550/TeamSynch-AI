@@ -90,7 +90,9 @@ export const useClients = (params?: { search?: string; status?: string; page?: n
   return useQuery({
     queryKey: ['crm', 'clients', params],
     queryFn: async () => {
-      const { data } = await api.get<{ data: Client[]; meta?: any }>('/crm/clients', { params: omitEmptySearch(params) });
+      // Response shape corrected: the API returns `{ data, total }` (repository
+      // findMany) — the old `{ meta?: any }` type hid the real pagination field.
+      const { data } = await api.get<{ data: Client[]; total: number; meta?: any }>('/crm/clients', { params: omitEmptySearch(params) });
       return data;
     },
   });
@@ -127,26 +129,16 @@ export const useCreateClient = () => {
   });
 };
 
-export const useUpdateClient = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<Client> }) => {
-      const res = await api.patch<{ data: Client }>(`/crm/clients/${id}`, data);
-      return res.data.data;
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['crm', 'clients'] });
-      queryClient.invalidateQueries({ queryKey: ['crm', 'client', variables.id] });
-    },
-  });
-};
+// NOTE (Bug #59 dead-code sweep): `useUpdateClient` was removed — it had
+// zero call sites anywhere in the app (verified by repo-wide census). The
+// backend PATCH /crm/clients/:id endpoint remains fully available.
 
 // Contacts
 export const useContacts = (params?: { search?: string; clientId?: string; page?: number; limit?: number }) => {
   return useQuery({
     queryKey: ['crm', 'contacts', params],
     queryFn: async () => {
-      const { data } = await api.get<{ data: Contact[]; meta?: any }>('/crm/contacts', { params: omitEmptySearch(params) });
+      const { data } = await api.get<{ data: Contact[]; total: number; meta?: any }>('/crm/contacts', { params: omitEmptySearch(params) });
       return data;
     },
   });
@@ -177,7 +169,7 @@ export const useLeads = (params?: { search?: string; status?: string; page?: num
   return useQuery({
     queryKey: ['crm', 'leads', params],
     queryFn: async () => {
-      const { data } = await api.get<{ data: Lead[]; meta?: any }>('/crm/leads', { params: omitEmptySearch(params) });
+      const { data } = await api.get<{ data: Lead[]; total: number; meta?: any }>('/crm/leads', { params: omitEmptySearch(params) });
       return data;
     },
   });
@@ -201,25 +193,16 @@ export const useCreateLead = () => {
   });
 };
 
-export const useUpdateLead = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<Lead> }) => {
-      const res = await api.patch<{ data: Lead }>(`/crm/leads/${id}`, data);
-      return res.data.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm', 'leads'] });
-    },
-  });
-};
+// NOTE (Bug #59 dead-code sweep): `useUpdateLead` was removed — it had
+// zero call sites anywhere in the app (verified by repo-wide census). The
+// backend PATCH /crm/leads/:id endpoint remains fully available.
 
 // Opportunities
 export const useOpportunities = (params?: { search?: string; stageId?: string; page?: number; limit?: number }) => {
   return useQuery({
     queryKey: ['crm', 'opportunities', params],
     queryFn: async () => {
-      const { data } = await api.get<{ data: Opportunity[]; meta?: any }>('/crm/opportunities', { params: omitEmptySearch(params) });
+      const { data } = await api.get<{ data: Opportunity[]; total: number; meta?: any }>('/crm/opportunities', { params: omitEmptySearch(params) });
       return data;
     },
   });

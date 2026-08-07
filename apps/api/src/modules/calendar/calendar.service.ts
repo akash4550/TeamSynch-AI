@@ -1,70 +1,161 @@
+import { CalendarProvider } from '@prisma/client';
+
 import { CalendarRepository } from './calendar.repository';
 import { maintenanceQueue } from '../jobs/queues';
 import { AppError } from '../../core/errors/AppError';
+import { encryptToken } from '../../core/utils/encryption.util';
+import {
+  createOAuthState,
+  isOAuthStateExpired,
+  verifyOAuthState,
+} from '../../core/utils/oauthState';
+import {
+  getOAuthProvider,
+  resolveOAuthConfig,
+} from './providers/calendar-oauth.config';
+
+const PROVIDERS: readonly string[] = ['GOOGLE', 'OUTLOOK'];
+
+export const isCalendarProvider = (
+  value: string
+): value is CalendarProvider => PROVIDERS.includes(value);
 
 export class CalendarService {
   private repository = new CalendarRepository();
 
-  /**
-   * Generates OAuth2 Authorization URL for Google Calendar or Microsoft Outlook
+  /*
+   * FEATURE (ledger #3, 2026-08-05 — REAL OAuth replaces the simulation):
+   * previously this minted an auth URL with a dummy client id whenever env
+   * was missing, signed nothing, and never verified state — and the
+   * callback fabricated tokens/emails into a shell CalendarEvent row.
+   * Now: fail-closed credential resolution (honest 503 when the provider
+   * is not configured on this deployment) and an HMAC-signed, 10-minute
+   * state credential (core/utils/oauthState.ts).
    */
-  getOAuthUrl(provider: 'GOOGLE' | 'OUTLOOK', state: string): { authUrl: string } {
-    if (provider === 'GOOGLE') {
-      const clientId = process.env.GOOGLE_CLIENT_ID || 'google_client_id_dummy';
-      const redirectUri = encodeURIComponent(process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/v1/calendar/callback/google');
-      const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar.events');
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=${state}&access_type=offline&prompt=consent`;
-      return { authUrl };
-    } else {
-      const clientId = process.env.OUTLOOK_CLIENT_ID || 'outlook_client_id_dummy';
-      const redirectUri = encodeURIComponent(process.env.OUTLOOK_REDIRECT_URI || 'http://localhost:4000/api/v1/calendar/callback/outlook');
-      const scope = encodeURIComponent('Calendars.ReadWrite offline_access');
-      const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=${scope}&state=${state}`;
-      return { authUrl };
+  getOAuthUrl(
+    provider: CalendarProvider,
+    organizationId: string,
+    userId: string
+  ): { authUrl: string; stateExpiresAt: string } {
+    const config = resolveOAuthConfig(provider);
+
+    if (!config) {
+      throw new AppError(
+        `${provider === 'GOOGLE' ? 'Google' : 'Microsoft'} Calendar is not configured on this deployment (missing ${provider === 'GOOGLE' ? 'GOOGLE_CALENDAR_CLIENT_ID/SECRET' : 'MICROSOFT_CALENDAR_CLIENT_ID/SECRET'})`,
+        503
+      );
     }
+
+    const { state, expiresAtMs } = createOAuthState(
+      organizationId,
+      userId,
+      provider
+    );
+
+    return {
+      authUrl: getOAuthProvider(provider).buildAuthUrl(config, state),
+      stateExpiresAt: new Date(expiresAtMs).toISOString(),
+    };
   }
 
-  /**
-   * Handles OAuth2 Code Exchange Callback and saves encrypted tokens
+  /*
+   * FEATURE (ledger #3): the callback is browser-delivered (the provider
+   * redirects the admin's browser to the API — no session bearer token is
+   * attached), so the VERIFIED STATE is the credential. Defense order:
+   * signature -> TTL -> provider match -> real code exchange. The account
+   * email is the provider id_token claim, tokens are AES-256-GCM
+   * encrypted BEFORE the upsert (the old code discarded the ciphertext),
+   * and reconnects rotate the single row instead of duplicating accounts.
    */
   async handleOAuthCallback(
-    organizationId: string,
-    userId: string,
-    provider: 'GOOGLE' | 'OUTLOOK',
-    code: string
+    pathProvider: CalendarProvider,
+    code: string,
+    state: string
   ) {
     if (!code) {
       throw new AppError('Missing OAuth authorization code', 400);
     }
 
-    // Standard OAuth token exchange simulation / external API handshake
-    const mockAccessToken = `ya29.access_token_${provider.toLowerCase()}_${Date.now()}`;
-    const mockRefreshToken = `1//refresh_token_${provider.toLowerCase()}_${Date.now()}`;
-    const expiresAt = new Date(Date.now() + 3600 * 1000);
+    const parts = verifyOAuthState(state);
+    if (!parts) {
+      throw new AppError('Invalid OAuth state — please restart the connection flow', 400);
+    }
 
-    const account = await this.repository.saveCalendarAccount({
-      organizationId,
-      userId,
-      provider,
-      email: `${userId.slice(0, 6)}@${provider.toLowerCase()}.com`,
-      accessToken: mockAccessToken,
-      refreshToken: mockRefreshToken,
-      expiresAt,
+    if (isOAuthStateExpired(parts)) {
+      throw new AppError('OAuth state expired — please restart the connection flow', 410);
+    }
+
+    if (parts.provider !== pathProvider) {
+      throw new AppError('OAuth state/provider mismatch', 400);
+    }
+
+    const config = resolveOAuthConfig(pathProvider);
+    if (!config) {
+      throw new AppError(
+        'This calendar provider is not configured on this deployment',
+        503
+      );
+    }
+
+    const tokens = await getOAuthProvider(pathProvider).exchangeCode(
+      config,
+      code
+    );
+
+    const account = await this.repository.upsertCalendarAccount({
+      organizationId: parts.organizationId,
+      userId: parts.userId,
+      provider: pathProvider,
+      email: tokens.email,
+      accessToken: encryptToken(tokens.accessToken),
+      refreshToken: tokens.refreshToken
+        ? encryptToken(tokens.refreshToken)
+        : null,
+      accessTokenExpiresAt: new Date(
+        Date.now() + tokens.expiresIn * 1000
+      ),
+      scopes: tokens.scopes,
     });
 
-    // Enqueue initial two-way calendar sync job to BullMQ
+    // Kick the initial two-way sync through the same queue boundary
+    // (the sync worker remains the documented simulation boundary).
     await maintenanceQueue.add('CALENDAR_TWO_WAY_SYNC', {
-      organizationId,
-      userId,
-      provider,
+      organizationId: parts.organizationId,
+      userId: parts.userId,
+      provider: pathProvider,
     });
 
-    return account;
+    return {
+      provider: account.provider,
+      email: account.email,
+      userId: account.userId,
+    };
   }
 
-  /**
-   * Triggers asynchronous two-way calendar sync job via BullMQ
-   */
+  /** Session-scoped list: connected accounts WITHOUT token material. */
+  async listAccounts(organizationId: string, userId: string) {
+    return this.repository.listCalendarAccounts(organizationId, userId);
+  }
+
+  /** Session-scoped disconnect; honest 404 when nothing was linked. */
+  async disconnectAccount(
+    organizationId: string,
+    userId: string,
+    provider: CalendarProvider
+  ) {
+    const deleted = await this.repository.deleteCalendarAccount(
+      organizationId,
+      userId,
+      provider
+    );
+
+    if (deleted.count === 0) {
+      throw new AppError('No connected account found for this provider', 404);
+    }
+
+    return { disconnected: true, provider };
+  }
+
   async triggerTwoWaySync(organizationId: string, userId: string) {
     const job = await maintenanceQueue.add('CALENDAR_TWO_WAY_SYNC', {
       organizationId,

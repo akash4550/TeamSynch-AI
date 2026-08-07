@@ -36,6 +36,20 @@ export const organizationRoom = (organizationId: string): string =>
 
 let io: Server | undefined;
 
+/*
+ * BUG FIX (#72 — presence "offline" lie with multiple tabs/devices):
+ * every socket connection announced `online` and every disconnect
+ * announced `offline`, with no accounting for the user's OTHER live
+ * sockets. A user with two open tabs who closed one was broadcast as
+ * offline to the whole organization while actively working in the
+ * surviving tab — and routine tab reloads flapped org-wide status.
+ * Connections are now counted per user (in-memory is correct: this
+ * deployment runs a single socket.io process with no Redis adapter), and
+ * presence is announced only on genuine transitions: first live
+ * connection → online, last disconnect → offline.
+ */
+const activeConnectionCounts = new Map<string, number>();
+
 export const initializeSocket = (httpServer: HttpServer): Server => {
   const socketServer = new Server(httpServer, {
     cors: {
@@ -84,26 +98,85 @@ export const initializeSocket = (httpServer: HttpServer): Server => {
 
     const orgRoom = organizationRoom(principal.organizationId);
     const personalRoom = userRoom(principal.userId);
-    void socket.join([orgRoom, personalRoom]);
+
+    /*
+     * FEATURE (queued item #11 — presence roster snapshot-on-join): until
+     * now, a freshly loaded page learned who is online ONLY from future
+     * deltas — after a reload everyone looked offline until some user
+     * happened to connect/disconnect, and colleagues never saw the
+     * current truth (#72 made the deltas accurate; this makes the
+     * baseline accurate too). After room join completes, the joining
+     * socket — and only it — receives `presence.snapshot` with the
+     * org room's current distinct userIds, read from the socket.io
+     * adapter (the single source of room truth; no parallel bookkeeping
+     * that could drift from #72's connection accounting, and self +
+     * multi-tab duplicates collapse via the Set). Emission is
+     * best-effort: a snapshot failure must never fail a handshake, so
+     * errors are logged and swallowed.
+     */
+    // Promise.resolve(): Socket.join returns void under some adapters/
+    // socket.io versions and a Promise under others — resolve() normalizes
+    // both so the snapshot always fires strictly after the join lands.
+    void Promise.resolve(socket.join([orgRoom, personalRoom])).then(async () => {
+      try {
+        const roomSockets = await socketServer.in(orgRoom).fetchSockets();
+        const onlineUserIds = new Set<string>();
+        for (const roomSocket of roomSockets) {
+          const roomPrincipal = (roomSocket.data as AuthenticatedSocketData).principal;
+          if (roomPrincipal?.userId) onlineUserIds.add(roomPrincipal.userId);
+        }
+        // Cast to base Socket: AuthSocket's emit map is Record<string, never>
+        // (no server→client events declared); BroadcastOperator#to(...) is
+        // permissive, but a direct socket.emit needs the widened type.
+        (socket as Socket).emit('presence.snapshot', {
+          users: [...onlineUserIds].map((userId) => ({
+            userId,
+            status: 'online' as const,
+            lastSeen: new Date(),
+          })),
+          timestamp: new Date(),
+        });
+      } catch (error) {
+        logger.warn('Presence snapshot emit skipped (best-effort)', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
 
     logger.info('Socket connected', { socketId: socket.id, userId: principal.userId });
 
-    socket.to(orgRoom).emit('presence.status', {
-      userId: principal.userId,
-      status: 'online',
-      timestamp: new Date(),
-    });
+    // BUG FIX (#72): only the user's FIRST live connection announces
+    // `online` — additional tabs/devices must not re-announce.
+    const liveConnections = (activeConnectionCounts.get(principal.userId) ?? 0) + 1;
+    activeConnectionCounts.set(principal.userId, liveConnections);
+
+    if (liveConnections === 1) {
+      socket.to(orgRoom).emit('presence.status', {
+        userId: principal.userId,
+        status: 'online',
+        timestamp: new Date(),
+      });
+    }
 
     const expiresInMs = Math.max(0, principal.accessTokenExpiresAt * 1000 - Date.now());
     const expirationTimer = setTimeout(() => socket.disconnect(true), expiresInMs);
 
     socket.once('disconnect', () => {
       clearTimeout(expirationTimer);
-      socket.to(orgRoom).emit('presence.status', {
-        userId: principal.userId,
-        status: 'offline',
-        timestamp: new Date(),
-      });
+
+      // BUG FIX (#72): only the user's LAST remaining disconnect announces
+      // `offline`; closing one of several tabs leaves them online.
+      const remaining = (activeConnectionCounts.get(principal.userId) ?? 1) - 1;
+      if (remaining <= 0) {
+        activeConnectionCounts.delete(principal.userId);
+        socket.to(orgRoom).emit('presence.status', {
+          userId: principal.userId,
+          status: 'offline',
+          timestamp: new Date(),
+        });
+      } else {
+        activeConnectionCounts.set(principal.userId, remaining);
+      }
     });
   });
 

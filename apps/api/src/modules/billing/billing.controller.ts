@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { AppError } from '../../core/errors/AppError';
+import { getValidatedRequest } from '../../core/middlewares/validateRequest';
+import { BillingCheckoutRequest, BillingPortalRequest } from './billing.dto';
 import { EntitlementService } from './entitlement.service';
 import { StripeBillingService } from './stripe.service';
 
@@ -14,8 +16,11 @@ export class BillingController {
     res.json({ data: subscription });
   }
 
+  // Bug #43: body now arrives validated by BillingCheckoutSchema (see billing.dto.ts)
   async createCheckoutSession(req: Request, res: Response) {
-    const { priceId, successUrl, cancelUrl } = req.body;
+    const {
+      body: { priceId, successUrl, cancelUrl },
+    } = getValidatedRequest<BillingCheckoutRequest>(req);
     const session = await stripeService.createCheckoutSession({
       organizationId: req.user!.organizationId,
       userId: req.user!.id,
@@ -26,8 +31,11 @@ export class BillingController {
     res.json({ data: session });
   }
 
+  // Bug #43: body now arrives validated by BillingPortalSchema (see billing.dto.ts)
   async createPortalSession(req: Request, res: Response) {
-    const { returnUrl } = req.body;
+    const {
+      body: { returnUrl },
+    } = getValidatedRequest<BillingPortalRequest>(req);
     const session = await stripeService.createPortalSession({
       organizationId: req.user!.organizationId,
       returnUrl: returnUrl || `${req.headers.origin}/settings`,
@@ -52,6 +60,9 @@ export class BillingController {
 
     // req.body is guaranteed to be an unparsed Buffer by express.raw() in app.ts
     const event = stripeService.constructWebhookEvent(req.body, signature);
+    // Ledger #10: the service owns the idempotency ledger (retry/duplicate
+    // short-circuit + PROCESSED/FAILED marking) and logs both outcomes; the
+    // response contract for Stripe stays `{ received: true }` either way.
     await stripeService.handleWebhookEvent(event);
 
     res.status(200).json({ received: true });

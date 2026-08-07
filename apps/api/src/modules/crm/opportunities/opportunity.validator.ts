@@ -34,7 +34,12 @@ const updateOpportunityBodySchema = createOpportunityBodySchema
 const opportunityQuerySchema = z
   .object({
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(100).default(10),
+    // FEATURE (ledger #6, 2026-08-05 — aggregate exception list @500):
+    // the web aggregates over this list (CRM dashboard pipeline value /
+    // avg probability, Pipeline Board) — 100 silently truncated the 101st+
+    // deal out of every number. Browse lists keep 100; this aggregate-
+    // consumed list allows 500, and the UI declares truncation beyond it.
+    limit: z.coerce.number().int().min(1).max(500).default(10),
     search: z.string().trim().min(1).max(255).optional(),
     stageId: z.string().uuid('Stage ID must be a valid UUID').optional(),
     sortBy: z

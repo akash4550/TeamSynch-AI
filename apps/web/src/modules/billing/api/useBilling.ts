@@ -12,6 +12,11 @@ export interface SubscriptionUsageData {
   plan: string;
   subscriptionStatus: string;
   quotas: PlanQuotas;
+  // FEATURE (ledger #11): operator-configured Stripe price ids per tier,
+  // served by the API. Buttons render from this; null means the tier is not
+  // configured on this deployment (button disables honestly — replacing
+  // the previous hardcoded fictional ids like 'price_pro_monthly').
+  plans?: Array<{ tier: 'STARTER' | 'PRO' | 'BUSINESS'; priceId: string | null }>;
   usage: {
     users: { current: number; max: number; percentage: number };
     projects: { current: number; max: number; percentage: number };

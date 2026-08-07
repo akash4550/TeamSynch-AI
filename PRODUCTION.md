@@ -58,12 +58,24 @@ Required secrets:
 - `REDIS_PASSWORD`
 - `JWT_ACCESS_SECRET`
 - `JWT_REFRESH_SECRET`
+- `ENCRYPTION_SECRET_KEY`
 
 Both JWT secrets must:
 
 - contain at least 32 characters
 - be different from each other
 - be generated from a cryptographically secure source
+
+`ENCRYPTION_SECRET_KEY` (added 2026-08-06, BUG FIX #106) must:
+
+- contain at least 32 characters
+- be different from every JWT secret
+- be generated from a cryptographically secure source
+- never be rotated casually once calendar tokens exist — rows sealed
+  with the old key will fail AES-256-GCM verification (users reconnect
+  their calendar to re-seal). After first enabling it, previously stored
+  tokens (sealed with the former development fallback) are unrecoverable
+  by design; affected users simply reconnect.
 
 Database and Redis passwords are interpolated into connection URLs. Use URL-safe characters unless the Compose configuration is changed to encode credentials.
 
@@ -624,9 +636,19 @@ Docker Compose manages these volumes:
 
 - `postgres_data`
 - `redis_data`
+- `api_uploads`
 
 PostgreSQL is the authoritative persistent data store.
 
-Redis persistence supports queues and cache recovery but is not a substitute for PostgreSQL backups.
+`api_uploads` (production-readiness addition, 2026-08-06) holds document bytes uploaded through
+the default LOCAL storage provider (`/app/apps/api/uploads` inside the api container). Documents
+are user data as much as database rows are: the volume survives update deploys (image swap) and
+must be protected accordingly.
+
+- Not covered by `npm run backup:production` (that runner is a PostgreSQL dump). With the local
+  provider, snapshot the `api_uploads` volume alongside your database backup; with
+  `STORAGE_PROVIDER=s3` object durability belongs to your bucket's redundancy/versioning and this
+  volume stays unused.
+- Redis persistence supports queues and cache recovery but is not a substitute for PostgreSQL backups.
 
 Monitor available disk capacity and configure automated backup retention before accepting production traffic.
