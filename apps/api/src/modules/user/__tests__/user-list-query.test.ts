@@ -1,15 +1,15 @@
 /*
- * BUG FIX (#114, 2026-08-06) pins â€” GET /users mounted
+ * BUG FIX (#114, 2026-08-06) pins — GET /users mounted
  * validateRequest(listUsersSchema) but the controller discarded the
  * validated output and passed RAW req.query downstream. The live
  * UserManagement page sends `?page=<n>&limit=10` on every render, so
  * Prisma received the STRINGS "10"/"1" on its Int-typed `take`/`skip`
- * (client-side argument validation error â†’ 500), and `pagination.page`
+ * (client-side argument validation error → 500), and `pagination.page`
  * echoed the string "1" where the envelope promises a number. The
  * controller now reads getValidatedRequest<ListUsersRequest>(req).query
  * (same armored pattern as BUG FIX #113's projects controller). These
  * pins exercise the REAL middleware, the controller boundary, and the
- * service's numeric contract â€” all without a database.
+ * service's numeric contract — all without a database.
  */
 import { Role } from '@prisma/client';
 
@@ -18,7 +18,7 @@ import { listUsersSchema } from '../user.validator';
 import { UserController } from '../user.controller';
 import { UserService } from '../user.service';
 
-// NOTE: the service-level pins live in user-list-pagination.test.ts â€”
+// NOTE: the service-level pins live in user-list-pagination.test.ts —
 // jest.mock is file-scoped, and mocking UserService here would strip the
 // real constructor those pins depend on (self-catch, same split as #104).
 jest.mock('../user.service');
@@ -42,7 +42,7 @@ describe('validateRequest(listUsersSchema) on GET /users (BUG FIX #114)', () => 
     expect(req.validated).toBeUndefined();
   });
 
-  it('enforces the advertised â‰¤100 limit cap (the live page sends 10)', async () => {
+  it('enforces the advertised ≤100 limit cap (the live page sends 10)', async () => {
     const { next, done } = runMiddleware({ limit: '999' });
     await done;
     expect(next.mock.calls[0][0]?.statusCode).toBe(400);
@@ -68,7 +68,7 @@ describe('validateRequest(listUsersSchema) on GET /users (BUG FIX #114)', () => 
   });
 
   it('accepts the exact live web payload and coerces strings to numbers', async () => {
-    // UserManagement.tsx sends { page, limit: 10, search?, role? } â€” on
+    // UserManagement.tsx sends { page, limit: 10, search?, role? } — on
     // the wire those are always strings.
     const { req, next, done } = runMiddleware({ page: '2', limit: '10' });
     await done;
@@ -88,9 +88,8 @@ describe('validateRequest(listUsersSchema) on GET /users (BUG FIX #114)', () => 
     });
   });
 });
-
 describe('UserController.getUsers (BUG FIX #114)', () => {
-  it('passes the VALIDATED query to the service â€” not raw req.query â€” and keeps the envelope', async () => {
+  it('passes the VALIDATED query to the service — not raw req.query — and keeps the envelope', async () => {
     const controller = new UserController();
     const inner = (controller as any).service as jest.Mocked<UserService>;
     inner.getUsers = jest.fn().mockResolvedValue({
@@ -101,7 +100,7 @@ describe('UserController.getUsers (BUG FIX #114)', () => {
     const parsedQuery = { page: 1, limit: 10, search: 'ada' };
     const req: any = {
       user: { organizationId: 'org-1' },
-      // Raw wire values stay UNCOERCED strings â€” if the controller ever
+      // Raw wire values stay UNCOERCED strings — if the controller ever
       // regresses to req.query the numbers arrive as strings (Prisma
       // 500, the original bug) and this pin fails.
       query: { page: '1', limit: '10', search: 'ada' },
