@@ -54,6 +54,7 @@ export const SearchResultsPage = () => {
 
   const navigate = useNavigate();
 
+  const cleanedDebouncedTerm = debouncedTerm.trim();
   const activeModules = moduleFilter === 'all' ? undefined : [moduleFilter];
   /*
    * BUG FIX (search claimed "No results found" on failure — Bug #37): this
@@ -80,10 +81,12 @@ export const SearchResultsPage = () => {
 
   // Update URL on debounce
   useEffect(() => {
-    if (debouncedTerm) {
-      setSearchParams({ q: debouncedTerm });
+    if (cleanedDebouncedTerm.length > 0) {
+      setSearchParams({ q: cleanedDebouncedTerm });
+    } else {
+      setSearchParams({});
     }
-  }, [debouncedTerm, setSearchParams]);
+  }, [cleanedDebouncedTerm, setSearchParams]);
 
   // Module → icon map: hues preserved from the original lucide version
   // (projects/tasks/crm/documents/get their own colour — Bug #85).

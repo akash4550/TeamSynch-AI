@@ -16,13 +16,15 @@ export interface SearchResult {
 }
 
 export const useGlobalSearch = (term: string, modules?: string[], limit: number = 20) => {
+  const cleanedTerm = term.trim();
+
   return useQuery({
-    queryKey: ['search', term, modules, limit],
+    queryKey: ['search', cleanedTerm, modules, limit],
     queryFn: async () => {
-      if (!term || term.trim().length < 2) return { total: 0, items: [] } as SearchResult;
+      if (!cleanedTerm || cleanedTerm.length < 2) return { total: 0, items: [] } as SearchResult;
       
       const queryParams = new URLSearchParams({
-        q: term,
+        q: cleanedTerm,
         limit: limit.toString(),
       });
       
@@ -33,7 +35,7 @@ export const useGlobalSearch = (term: string, modules?: string[], limit: number 
       const { data } = await api.get<{ data: SearchResult }>(`/search?${queryParams.toString()}`);
       return data.data;
     },
-    enabled: term.trim().length >= 2,
+    enabled: cleanedTerm.length >= 2,
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes to prevent spamming
   });
 };

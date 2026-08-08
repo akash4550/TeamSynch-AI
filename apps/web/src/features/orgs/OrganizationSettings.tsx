@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, organizationLogoUrl } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { useOptionalAuth } from '../../providers/AuthProvider';
 
 /*
  * UI PASS (#UI-org-settings, 2026-08-07): visual-only alignment of the
@@ -26,6 +27,7 @@ const fieldClass =
 
 export const OrganizationSettings = () => {
   const queryClient = useQueryClient();
+  const auth = useOptionalAuth();
 
   /*
    * BUG FIX (silent save failures): the save mutation had NO onError and
@@ -76,8 +78,13 @@ export const OrganizationSettings = () => {
       const res = await api.patch('/organizations', updatedData);
       return res.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['organization'] });
+    onSuccess: (response) => {
+      const updated = response?.data?.data;
+      if (updated && typeof updated === 'object') {
+        queryClient.setQueryData(['organization'], updated);
+        auth?.updateOrganization(updated);
+      }
+      void queryClient.invalidateQueries({ queryKey: ['organization'] });
       setSaveError(null);
       setSaveSuccess(true);
     },
@@ -128,6 +135,10 @@ export const OrganizationSettings = () => {
   const logoSrc =
     data?.id && data?.logo ? organizationLogoUrl(data.id, data.logo) : null;
 
+  useEffect(() => {
+    setFailedLogoSrc(null);
+  }, [logoSrc]);
+
   const logoUploadMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
@@ -137,8 +148,15 @@ export const OrganizationSettings = () => {
       });
       return res.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['organization'] });
+    onSuccess: (response) => {
+      const logoUrl = response?.data?.logoUrl;
+      if (typeof logoUrl === 'string' && logoUrl.length > 0) {
+        queryClient.setQueryData(['organization'], (current: any) =>
+          current ? { ...current, logo: logoUrl } : current
+        );
+        auth?.updateOrganization({ logo: logoUrl });
+      }
+      void queryClient.invalidateQueries({ queryKey: ['organization'] });
       setLogoError(null);
       setLogoSuccess(true);
     },

@@ -53,4 +53,48 @@ export class OrganizationRepository {
             throw error;
         }
     }
+
+    async findStoredLogo(organizationId: string) {
+        return prisma.organizationLogo.findUnique({
+            where: { organizationId },
+            select: {
+                content: true,
+                mimeType: true,
+                contentHash: true,
+            },
+        });
+    }
+
+    async storeLogo(
+        organizationId: string,
+        data: { content: Buffer; mimeType: string; contentHash: string },
+    ) {
+        return prisma.$transaction(async (transaction) => {
+            const organization = await transaction.organization.findFirst({
+                where: {
+                    id: organizationId,
+                    isActive: true,
+                    deletedAt: null,
+                },
+                select: { id: true },
+            });
+
+            if (!organization) return null;
+
+            await transaction.organizationLogo.upsert({
+                where: { organizationId },
+                create: {
+                    organizationId,
+                    ...data,
+                },
+                update: data,
+            });
+
+            return transaction.organization.update({
+                where: { id: organizationId },
+                data: { logo: `database:${data.contentHash}` },
+                select: organizationSafeSelect,
+            });
+        });
+    }
 }
