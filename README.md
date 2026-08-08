@@ -202,8 +202,11 @@ Application flow:
 
    `npm run seed --workspace apps/api`
 
-   Demo sign-in: workspace `00000000-0000-4000-8000-000000000001`,
-   email `demo@teamsynch-ai.com`, password `password123`.
+   Demo sign-in:
+   - Workspace ID: `00000000-0000-4000-8000-000000000001` (Organization: akash4550)
+   - Admin Email: `demo@teamsynch-ai.com`
+   - Manager Email: `manager@teamsynch-ai.com`
+   - Password: `password123`
 
 9. Start the development servers:
 

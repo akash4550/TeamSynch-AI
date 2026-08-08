@@ -75,6 +75,16 @@ export class OrganizationController {
             return;
         }
 
+        if (descriptor.kind === 'database') {
+            res.setHeader('Content-Type', descriptor.contentType);
+            res.setHeader('Content-Length', descriptor.buffer.length);
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            res.setHeader('ETag', `"${descriptor.etag}"`);
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            res.send(descriptor.buffer);
+            return;
+        }
+
         let buffer: Buffer;
         try {
             buffer = await this.localLogoProvider.getFileBuffer(descriptor.key);

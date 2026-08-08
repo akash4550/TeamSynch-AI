@@ -42,6 +42,7 @@ interface AuthContextValue {
    * makes it part of the public contract.
    */
   refreshSession: () => Promise<string>;
+  updateOrganization: (patch: Partial<AuthOrganization>) => void;
 }
 
 // Exported (ledger #3) so embeddable widgets can OPTIONALLY read auth
@@ -141,6 +142,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await logoutRequest();
   }, [clearSession]);
 
+  const updateOrganization = useCallback((patch: Partial<AuthOrganization>) => {
+    setSession((current) => {
+      if (!current) return current;
+      const nextSession = {
+        ...current,
+        organization: { ...current.organization, ...patch },
+      };
+      sessionRef.current = nextSession;
+      return nextSession;
+    });
+  }, []);
+
   useEffect(() => registerAuthCoordinator({
     getAccessToken: () => accessTokenRef.current,
     refreshSession,
@@ -163,7 +176,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     logout,
     clearSession,
     refreshSession, // BUG FIX (#75): see interface note above
-  }), [accessToken, clearSession, login, logout, refreshSession, session, status]);
+    updateOrganization,
+  }), [accessToken, clearSession, login, logout, refreshSession, session, status, updateOrganization]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
@@ -176,3 +190,9 @@ export const useAuth = (): AuthContextValue => {
 
   return context;
 };
+
+// Settings widgets also render in isolated component tests and embeddable
+// shells. They may synchronize session identity when a provider is present
+// without making that provider mandatory.
+export const useOptionalAuth = (): AuthContextValue | null =>
+  useContext(AuthContext);

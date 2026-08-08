@@ -1,21 +1,20 @@
+import { createHash } from 'node:crypto';
 import { OrganizationRepository } from './organization.repository';
 import { UpdateOrganizationDto } from './organization.dto';
 import { AppError } from '../../core/errors/AppError';
-import { StorageFactory } from '../../core/storage/StorageFactory';
 import { S3StorageProvider } from '../../core/storage/S3StorageProvider';
-import { IStorageProvider, StorageFilePayload } from '../../core/storage/IStorageProvider';
+import { StorageFilePayload } from '../../core/storage/IStorageProvider';
 
 export type PublicLogoDescriptor =
     | { kind: 'local'; key: string; contentType: string }
+    | { kind: 'database'; buffer: Buffer; contentType: string; etag: string }
     | { kind: 'redirect'; url: string };
 
 export class OrganizationService {
     private repository: OrganizationRepository;
-    private storageProvider: IStorageProvider;
 
-    constructor() {
-        this.repository = new OrganizationRepository();
-        this.storageProvider = StorageFactory.getProvider();
+    constructor(repository = new OrganizationRepository()) {
+        this.repository = repository;
     }
 
     async getOrganization(organizationId: string) {
@@ -104,6 +103,20 @@ export class OrganizationService {
 
         const stored = org.logo;
 
+        if (stored.startsWith('database:')) {
+            const asset = await this.repository.findStoredLogo(organizationId);
+            if (!asset || `database:${asset.contentHash}` !== stored) {
+                throw new AppError('Organization logo not found', 404);
+            }
+
+            return {
+                kind: 'database',
+                buffer: Buffer.from(asset.content),
+                contentType: asset.mimeType,
+                etag: asset.contentHash,
+            };
+        }
+
         if (stored.startsWith(OrganizationService.LOCAL_LOGO_PREFIX)) {
             const key = this.decodeStoredKey(
                 stored.slice(OrganizationService.LOCAL_LOGO_PREFIX.length)
@@ -191,15 +204,17 @@ export class OrganizationService {
         // never leaves orphan files behind.
         await this.getOrganization(organizationId);
 
-        const uploadResult = await this.storageProvider.uploadFile(
-            file,
-            `org_${organizationId}/logo`
-        );
-
-        await this.repository.update(organizationId, {
-            logo: uploadResult.url,
+        const contentHash = createHash('sha256').update(file.buffer).digest('hex');
+        const updated = await this.repository.storeLogo(organizationId, {
+            content: file.buffer,
+            mimeType: file.mimetype,
+            contentHash,
         });
 
-        return { logoUrl: uploadResult.url };
+        if (!updated) {
+            throw new AppError('Organization not found', 404);
+        }
+
+        return { logoUrl: updated.logo! };
     }
 }

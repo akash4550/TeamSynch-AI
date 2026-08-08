@@ -106,10 +106,27 @@ plan String?
   teamInvitations TeamInvitation[]
   AIUsageLog      AIUsageLog[]
   calendarAccounts CalendarAccount[]
+  storedLogo       OrganizationLogo?
 
   @@index([deletedAt])
   @@index([isActive])
 }
+
+// Organization logos are small (the upload route caps them at 2 MB) and are
+// needed on every deployment. Keeping the bytes in Postgres makes branding
+// durable on hosts such as Render where the application filesystem is
+// ephemeral. Large documents continue to use the configured storage provider.
+model OrganizationLogo {
+  organizationId String   @id
+  content        Bytes
+  mimeType       String
+  contentHash    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
 model User {
   id             String    @id @default(uuid())
   organizationId String
