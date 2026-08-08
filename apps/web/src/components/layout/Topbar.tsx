@@ -35,7 +35,7 @@ export const Topbar = () => {
 
   return (
     /* Frosted-glass header; borders/padding adapt per breakpoint */
-    <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white/90 px-4 backdrop-blur transition-colors sm:px-6 dark:border-slate-700/80 dark:bg-slate-800/90">
+    <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white/90 px-4 backdrop-blur transition-colors sm:px-6 dark:border-slate-700/80 dark:bg-slate-800/90 z-50">
       {/* Left cluster: menu toggle + breadcrumb (collapses gracefully on mobile) */}
       <div className="flex min-w-0 items-center gap-2 sm:gap-4">
         <button

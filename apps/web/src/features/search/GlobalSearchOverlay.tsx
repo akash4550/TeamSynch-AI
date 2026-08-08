@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FC } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowPathIcon,
   CheckCircleIcon,
@@ -95,7 +96,7 @@ export const GlobalSearchOverlay: FC<{ isOpen: boolean; onClose: () => void }> =
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[10vh] bg-slate-900/60 backdrop-blur-sm" onClick={onClose}>
       <div
         role="dialog"
@@ -207,6 +208,7 @@ export const GlobalSearchOverlay: FC<{ isOpen: boolean; onClose: () => void }> =
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
