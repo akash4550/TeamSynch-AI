@@ -23,6 +23,7 @@ const unauthenticated = (): ReturnType<typeof useAuth> => ({
   login: vi.fn(),
   logout: vi.fn(),
   clearSession: vi.fn(),
+  updateOrganization: vi.fn(),
   // BUG FIX (#75): required by the widened AuthContextValue contract.
   refreshSession: vi.fn().mockResolvedValue('refreshed-access-token'),
 });
