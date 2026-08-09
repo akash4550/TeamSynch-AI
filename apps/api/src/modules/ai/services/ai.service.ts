@@ -94,24 +94,26 @@ export class AIService {
           });
       }
 
-      recordAIRequest({ ...metricLabels, result: 'success' });
-      recordAIRequestDurationSeconds(metricLabels, latencyMs / 1000);
-      // Embedding responses expose only total_tokens; do not fabricate a
-      // prompt/completion split.
-      recordAITokens(
-        { ...metricLabels, tokenType: 'total' },
-        response.usage.totalTokens,
-      );
+      this.observeSafely('embedding success', () => {
+        recordAIRequest({ ...metricLabels, result: 'success' });
+        recordAIRequestDurationSeconds(metricLabels, latencyMs / 1000);
+        // Embedding responses expose only total_tokens; do not fabricate
+        // a prompt/completion split.
+        recordAITokens(
+          { ...metricLabels, tokenType: 'total' },
+          response.usage.totalTokens,
+        );
 
-      logger.info('ai.call.completed', {
-        event: 'ai.call.completed',
-        correlationId: ctx?.correlationId,
-        feature: metricLabels.feature,
-        provider,
-        model: response.model,
-        kind: 'embedding',
-        latencyMs,
-        tokens: { total: response.usage.totalTokens },
+        logger.info('ai.call.completed', {
+          event: 'ai.call.completed',
+          correlationId: ctx?.correlationId,
+          feature: metricLabels.feature,
+          provider,
+          model: response.model,
+          kind: 'embedding',
+          latencyMs,
+          tokens: { total: response.usage.totalTokens },
+        });
       });
 
       return { embedding: response.embedding, totalTokens: response.usage.totalTokens };
@@ -147,25 +149,27 @@ export class AIService {
           .catch(() => undefined);
       }
 
-      recordAIRequest({ ...metricLabels, result: 'failure' });
-      recordAIRequestDurationSeconds(metricLabels, latencyMs / 1000);
-      recordAIError(
-        metricLabels.feature,
-        provider,
-        safeError.providerCode ?? 'unknown',
-      );
+      this.observeSafely('embedding failure', () => {
+        recordAIRequest({ ...metricLabels, result: 'failure' });
+        recordAIRequestDurationSeconds(metricLabels, latencyMs / 1000);
+        recordAIError(
+          metricLabels.feature,
+          provider,
+          safeError.providerCode ?? 'unknown',
+        );
 
-      logger.warn('ai.call.failed', {
-        event: 'ai.call.failed',
-        correlationId: ctx?.correlationId,
-        feature: metricLabels.feature,
-        provider,
-        model: safeError.model,
-        kind: 'embedding',
-        latencyMs,
-        providerCode: safeError.providerCode,
-        providerRequestId: safeError.requestId,
-        errorMessage: safeError.message,
+        logger.warn('ai.call.failed', {
+          event: 'ai.call.failed',
+          correlationId: ctx?.correlationId,
+          feature: metricLabels.feature,
+          provider,
+          model: safeError.model,
+          kind: 'embedding',
+          latencyMs,
+          providerCode: safeError.providerCode,
+          providerRequestId: safeError.requestId,
+          errorMessage: safeError.message,
+        });
       });
 
       throw safeError;
@@ -247,29 +251,31 @@ export class AIService {
             );
       const latencyMs = Date.now() - startedAt;
 
-      recordAIRequest({ ...metricLabels, result: 'failure' });
-      recordAIRequestDurationSeconds(metricLabels, latencyMs / 1000);
-      recordAIError(
-        normalizedFeature,
-        provider,
-        safeError.providerCode ?? 'unknown',
-      );
+      this.observeSafely('completion failure', () => {
+        recordAIRequest({ ...metricLabels, result: 'failure' });
+        recordAIRequestDurationSeconds(metricLabels, latencyMs / 1000);
+        recordAIError(
+          normalizedFeature,
+          provider,
+          safeError.providerCode ?? 'unknown',
+        );
 
-      logger.warn('ai.call.failed', {
-        event: 'ai.call.failed',
-        correlationId,
-        feature: normalizedFeature,
-        provider,
-        model: safeError.model,
-        kind: 'completion',
-        latencyMs,
-        providerCode: safeError.providerCode,
-        // The upstream provider request id (if the provider exposes one)
-        // stays in this structured log — it is NOT written into
-        // AIUsageLog.requestId, which now holds the TeamSynch correlation
-        // id exclusively.
-        providerRequestId: safeError.requestId,
-        errorMessage: safeError.message,
+        logger.warn('ai.call.failed', {
+          event: 'ai.call.failed',
+          correlationId,
+          feature: normalizedFeature,
+          provider,
+          model: safeError.model,
+          kind: 'completion',
+          latencyMs,
+          providerCode: safeError.providerCode,
+          // The upstream provider request id (if the provider exposes
+          // one) stays in this structured log — it is NOT written into
+          // AIUsageLog.requestId, which now holds the TeamSynch
+          // correlation id exclusively.
+          providerRequestId: safeError.requestId,
+          errorMessage: safeError.message,
+        });
       });
 
       await this.logUsage({
@@ -300,37 +306,52 @@ export class AIService {
       correlationId,
     });
 
-    recordAIRequest({ ...metricLabels, result: 'success' });
-    recordAIRequestDurationSeconds(metricLabels, latencyMs / 1000);
-    recordAITokens(
-      { ...metricLabels, tokenType: 'prompt' },
-      response.usage.promptTokens,
-    );
-    recordAITokens(
-      { ...metricLabels, tokenType: 'completion' },
-      response.usage.completionTokens,
-    );
-    recordAITokens(
-      { ...metricLabels, tokenType: 'total' },
-      response.usage.totalTokens,
-    );
+    this.observeSafely('completion success', () => {
+      recordAIRequest({ ...metricLabels, result: 'success' });
+      recordAIRequestDurationSeconds(metricLabels, latencyMs / 1000);
+      recordAITokens(
+        { ...metricLabels, tokenType: 'prompt' },
+        response.usage.promptTokens,
+      );
+      recordAITokens(
+        { ...metricLabels, tokenType: 'completion' },
+        response.usage.completionTokens,
+      );
+      recordAITokens(
+        { ...metricLabels, tokenType: 'total' },
+        response.usage.totalTokens,
+      );
 
-    logger.info('ai.call.completed', {
-      event: 'ai.call.completed',
-      correlationId,
-      feature: normalizedFeature,
-      provider,
-      model: response.model,
-      kind: 'completion',
-      latencyMs,
-      tokens: {
-        prompt: response.usage.promptTokens,
-        completion: response.usage.completionTokens,
-        total: response.usage.totalTokens,
-      },
+      logger.info('ai.call.completed', {
+        event: 'ai.call.completed',
+        correlationId,
+        feature: normalizedFeature,
+        provider,
+        model: response.model,
+        kind: 'completion',
+        latencyMs,
+        tokens: {
+          prompt: response.usage.promptTokens,
+          completion: response.usage.completionTokens,
+          total: response.usage.totalTokens,
+        },
+      });
     });
 
     return response;
+  }
+
+  /** Best-effort observability: never breaks the AI request (warn-only). */
+  private observeSafely(label: string, fn: () => void): void {
+    try {
+      fn();
+    } catch (error: unknown) {
+      console.warn(
+        `[AIService] ${label} observability failure (non-fatal): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   private resolveProvider():

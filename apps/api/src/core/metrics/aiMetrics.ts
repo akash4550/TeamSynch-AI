@@ -5,16 +5,12 @@
  * Reuses the shared metricsRegistry, so the existing /metrics endpoint
  * (Super Admin) exposes these automatically.
  *
- * Cardinality discipline: labels are strictly BOUNDED. feature is the
- * small fixed set of AI features; provider is the PrismaAIProvider enum;
- * kind = completion|embedding; result = success|failure;
- * token_type = prompt|completion|total; code = providerCode or 'unknown'.
- * NEVER add requestId / userId / organizationId / errorMessage as labels
- * — those are unbounded and belong in logs or AIUsageLog, not Prometheus.
- *
- * Tokens are ONLY provider-reported values from the API response — never
- * estimated. Failed attempts have no usage payload, so they record no
- * token metric.
+ * Labels are strictly BOUNDED (feature is a small fixed set; provider is
+ * the PrismaAIProvider enum; kind/result/token_type/code are fixed
+ * vocabularies). NEVER add requestId / userId / organizationId /
+ * errorMessage as labels — high cardinality, they belong in logs/DB.
+ * Tokens are ONLY provider-reported values — never estimated; failed
+ * attempts have no usage payload, so they record no token metric.
  */
 
 import {

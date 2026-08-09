@@ -574,6 +574,46 @@ describe('AIService', () => {
     expect(usageCreateMock.mock.calls[0][0].data.success).toBe(false);
   });
 
+  it('never lets an observability failure break the AI call itself', async () => {
+    providerMock.generateCompletion.mockResolvedValue(completionResponse);
+    usageCreateMock.mockResolvedValue({});
+    // Metrics-recording failure: the completion must still succeed.
+    recordAIRequestMock.mockImplementation(() => {
+      throw new Error('prometheus unavailable');
+    });
+
+    const result = await service.generateCompletion(
+      'organization-1',
+      'user-1',
+      'TASK_SUMMARY',
+      { prompt: 'Summarize this task' },
+      'corr-safe-1',
+    );
+
+    expect(result).toEqual(completionResponse);
+    expect(usageCreateMock).toHaveBeenCalledTimes(1);
+
+    // Same guarantee on the failure path: observability failing must not
+    // mask the original provider error.
+    providerMock.generateCompletion.mockRejectedValue(
+      new AIProviderError('provider down', {
+        provider: 'mock',
+        model: 'm',
+        statusCode: 503,
+      }),
+    );
+
+    await expect(
+      service.generateCompletion(
+        'organization-1',
+        'user-1',
+        'WORKSPACE_ASSISTANT',
+        { prompt: 'Question' },
+        'corr-safe-2',
+      ),
+    ).rejects.toMatchObject({ statusCode: 503 });
+  });
+
   it('records embeddings without tenant context under the unknown feature', async () => {
     providerMock.generateEmbedding.mockResolvedValue({
       embedding: [1],

@@ -1,9 +1,8 @@
 /*
- * AI metrics unit tests — deterministic and offline. These tests exercise
- * the REAL prom-client metrics (record functions -> counters/histograms)
- * and assert against the shared registry's rendered output. Only the four
- * AI metrics are reset in beforeEach — the shared registry itself is never
- * cleared, so other suites' metrics are untouched.
+ * AI metrics unit tests — deterministic and offline: exercise the REAL
+ * prom-client metrics and assert the shared registry's rendered output.
+ * Only the four AI metrics are reset in beforeEach — the shared registry
+ * itself is never cleared.
  */
 
 import { metricsRegistry } from '../httpMetrics';
@@ -54,25 +53,12 @@ describe('aiMetrics', () => {
     }
   });
 
-  it('counts requests by result', async () => {
-    recordAIRequest({
-      feature: 'RAG_WORKSPACE_CHAT',
-      provider: 'OPENAI',
-      kind: 'completion',
-      result: 'success',
-    });
-    recordAIRequest({
-      feature: 'RAG_WORKSPACE_CHAT',
-      provider: 'OPENAI',
-      kind: 'completion',
-      result: 'success',
-    });
-    recordAIRequest({
-      feature: 'RAG_WORKSPACE_CHAT',
-      provider: 'OPENAI',
-      kind: 'completion',
-      result: 'failure',
-    });
+  it('counts requests by result and keeps series separate', async () => {
+    recordAIRequest({ feature: 'RAG_WORKSPACE_CHAT', provider: 'OPENAI', kind: 'completion', result: 'success' });
+    recordAIRequest({ feature: 'RAG_WORKSPACE_CHAT', provider: 'OPENAI', kind: 'completion', result: 'success' });
+    recordAIRequest({ feature: 'RAG_WORKSPACE_CHAT', provider: 'OPENAI', kind: 'completion', result: 'failure' });
+    recordAIRequest({ feature: 'rag_ingest', provider: 'OPENAI', kind: 'embedding', result: 'success' });
+    recordAIRequest({ feature: 'TASK_SUMMARY', provider: 'MOCK', kind: 'completion', result: 'success' });
 
     const output = await metricsRegistry.metrics();
     expect(output).toContain(
@@ -81,31 +67,8 @@ describe('aiMetrics', () => {
     expect(output).toContain(
       'teamsynch_ai_requests_total{feature="RAG_WORKSPACE_CHAT",provider="OPENAI",kind="completion",result="failure"} 1',
     );
-  });
-
-  it('keeps feature/provider/kind series separate', async () => {
-    recordAIRequest({
-      feature: 'rag_ingest',
-      provider: 'OPENAI',
-      kind: 'embedding',
-      result: 'success',
-    });
-    recordAIRequest({
-      feature: 'rag_ingest',
-      provider: 'OPENAI',
-      kind: 'embedding',
-      result: 'success',
-    });
-    recordAIRequest({
-      feature: 'TASK_SUMMARY',
-      provider: 'MOCK',
-      kind: 'completion',
-      result: 'success',
-    });
-
-    const output = await metricsRegistry.metrics();
     expect(output).toContain(
-      'teamsynch_ai_requests_total{feature="rag_ingest",provider="OPENAI",kind="embedding",result="success"} 2',
+      'teamsynch_ai_requests_total{feature="rag_ingest",provider="OPENAI",kind="embedding",result="success"} 1',
     );
     expect(output).toContain(
       'teamsynch_ai_requests_total{feature="TASK_SUMMARY",provider="MOCK",kind="completion",result="success"} 1',
