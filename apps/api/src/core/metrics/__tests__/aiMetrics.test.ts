@@ -11,10 +11,14 @@ import {
   aiRequestDurationSeconds,
   aiRequestsTotal,
   aiTokensTotal,
+  ragRetrievalsTotal,
+  ragStageDurationSeconds,
   recordAIError,
   recordAIRequest,
   recordAIRequestDurationSeconds,
   recordAITokens,
+  recordRagRetrieval,
+  recordRagStageDuration,
 } from '../aiMetrics';
 
 describe('aiMetrics', () => {
@@ -23,6 +27,8 @@ describe('aiMetrics', () => {
     aiRequestDurationSeconds.reset();
     aiTokensTotal.reset();
     aiErrorsTotal.reset();
+    ragRetrievalsTotal.reset();
+    ragStageDurationSeconds.reset();
   });
 
   it('renders only bounded labels (no correlation/user/tenant labels)', async () => {
@@ -134,6 +140,39 @@ describe('aiMetrics', () => {
     );
     expect(output).toContain(
       'teamsynch_ai_errors_total{feature="rag_query",provider="OPENAI",code="timeout"} 1',
+    );
+  });
+
+  it('counts RAG retrievals by method (vector vs text_fallback)', async () => {
+    recordRagRetrieval('vector');
+    recordRagRetrieval('vector');
+    recordRagRetrieval('text_fallback');
+
+    const output = await metricsRegistry.metrics();
+    expect(output).toContain(
+      'teamsynch_ai_rag_retrievals_total{retrieval_method="vector"} 2',
+    );
+    expect(output).toContain(
+      'teamsynch_ai_rag_retrievals_total{retrieval_method="text_fallback"} 1',
+    );
+  });
+
+  it('observes RAG stage durations separately (retrieval vs generation)', async () => {
+    recordRagStageDuration('retrieval', 0.12);
+    recordRagStageDuration('generation', 3.5);
+
+    const output = await metricsRegistry.metrics();
+    expect(output).toContain(
+      'teamsynch_ai_rag_stage_duration_seconds_count{kind="retrieval"} 1',
+    );
+    expect(output).toContain(
+      'teamsynch_ai_rag_stage_duration_seconds_sum{kind="retrieval"} 0.12',
+    );
+    expect(output).toContain(
+      'teamsynch_ai_rag_stage_duration_seconds_count{kind="generation"} 1',
+    );
+    expect(output).toContain(
+      'teamsynch_ai_rag_stage_duration_seconds_sum{kind="generation"} 3.5',
     );
   });
 });

@@ -66,6 +66,48 @@ export const aiErrorsTotal = new Counter({
   registers: [metricsRegistry],
 });
 
+/* ---------------- RAG retrieval observability (ledger #19) ----------------
+ * Tracks which retrieval path served each RAG query and how long each RAG
+ * pipeline stage took. Labels are strictly bounded: retrieval_method is
+ * 'vector' | 'text_fallback', kind is 'retrieval' | 'generation'. This
+ * answers "what % of RAG traffic is real pgvector vs lexical fallback"
+ * and where RAG latency goes — without any request-level labels.
+ */
+
+export const RAG_RETRIEVAL_METHODS = ['vector', 'text_fallback'] as const;
+export const RAG_STAGE_KINDS = ['retrieval', 'generation'] as const;
+
+export type RagRetrievalMethod = typeof RAG_RETRIEVAL_METHODS[number];
+export type RagStageKind = typeof RAG_STAGE_KINDS[number];
+
+export const ragRetrievalsTotal = new Counter({
+  name: 'teamsynch_ai_rag_retrievals_total',
+  help: 'Total RAG chat retrievals, by retrieval method (vector = real pgvector cosine, text_fallback = lexical)',
+  labelNames: ['retrieval_method'],
+  registers: [metricsRegistry],
+});
+
+export const ragStageDurationSeconds = new Histogram({
+  name: 'teamsynch_ai_rag_stage_duration_seconds',
+  help: 'RAG pipeline stage duration in seconds (retrieval vs generation)',
+  labelNames: ['kind'],
+  // Generation can exceed 30s on slow models; keep the same ceiling as
+  // the general AI duration histogram.
+  buckets: [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 30],
+  registers: [metricsRegistry],
+});
+
+export function recordRagRetrieval(method: RagRetrievalMethod): void {
+  ragRetrievalsTotal.inc({ retrieval_method: method });
+}
+
+export function recordRagStageDuration(
+  kind: RagStageKind,
+  durationSeconds: number,
+): void {
+  ragStageDurationSeconds.observe({ kind }, durationSeconds);
+}
+
 export function recordAIRequest(
   labels: AILabels & { result: AIResult },
 ): void {
