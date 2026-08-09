@@ -27,7 +27,8 @@ export class RAGService {
   async askRAGQuestion(
     organizationId: string,
     userId: string,
-    query: string
+    query: string,
+    correlationId?: string,
   ): Promise<RAGAnswerResponse> {
     // 1. Similarity search over tenant chunks. Ledger #9: the asking user is
     //    threaded through so the question-embedding call is billed to them
@@ -35,7 +36,7 @@ export class RAGService {
     //    or user attribution at all. An embedding-provider outage surfaces
     //    as an honest 503 (see VectorService) instead of fabricated results.
     const { chunks: relevantChunks, retrievalMethod } =
-      await this.vectorService.similaritySearch(organizationId, query, 5, userId);
+      await this.vectorService.similaritySearch(organizationId, query, 5, userId, correlationId);
 
     // 2. Build augmented prompt context from retrieved chunks
     const contextSnippets = relevantChunks
@@ -52,7 +53,8 @@ export class RAGService {
       {
         systemPrompt: `${PROMPTS.SYSTEM.DEFAULT_ASSISTANT}\nAnswer the user question strictly using the provided Retrieved Workspace Sources. Cite source numbers when making factual assertions.`,
         prompt: augmentedPrompt,
-      }
+      },
+      correlationId,
     );
 
     // 4. Map citations — relevance only exists for real vector distances.

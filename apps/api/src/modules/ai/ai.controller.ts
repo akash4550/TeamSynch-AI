@@ -75,7 +75,7 @@ export class AIController {
     const organizationId = req.user!.organizationId;
     const userId = req.user!.id;
 
-    const ragResponse = await ragService.askRAGQuestion(organizationId, userId, query);
+    const ragResponse = await ragService.askRAGQuestion(organizationId, userId, query, req.requestId);
     res.json({ data: ragResponse });
   }
 }
