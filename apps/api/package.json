@@ -15,7 +15,8 @@
     "test:auth": "npm run test:integration -- src/modules/auth/__tests__/auth.integration.test.ts",
     "test:socket-auth": "npm run test:integration -- src/modules/realtime/__tests__/socket.integration.test.ts",
     "migrate:deploy": "prisma migrate deploy",
-    "test:integration": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --testPathIgnorePatterns=node_modules --runInBand"
+    "test:integration": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --testPathIgnorePatterns=node_modules --runInBand",
+    "eval:rag": "tsx src/modules/ai/evaluation/evaluate.ts"
   },
   "keywords": [],
   "author": "",

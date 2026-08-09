@@ -236,6 +236,23 @@ Backend unit tests (DB-free gate — no Postgres/Redis required):
 
 `npm test --workspace apps/api`
 
+## RAG Evaluation
+
+`npm run eval:rag` deterministically measures **retrieval quality** over a
+small version-controlled synthetic dataset (`apps/api/src/modules/ai/evaluation/`),
+without touching the production RAG pipeline:
+
+- **Recall@K**: fraction of expected relevant chunks in the top K retrieved
+  results (reported at K = 1, 3, 5).
+- **MRR** (Mean Reciprocal Rank): mean over cases of `1 / rank` of the first
+  relevant result (0 when none is retrieved).
+
+The dataset is fictional TeamSynch documentation (no production data) with
+hand-labeled queries, including multi-relevant and deliberate hard cases.
+Ranking uses an in-memory deterministic lexical baseline — no database, no
+AI provider, no API keys — so the command is offline and safe in CI. It
+exits non-zero only on harness errors, not on benchmark scores.
+
 Backend integration suites (boot the full app; require PostgreSQL on `127.0.0.1:55433` and Redis on `127.0.0.1:56379` — see `apps/api/src/test/setup-env.ts`):
 
 `npm run test:integration --workspace apps/api`
@@ -246,12 +263,12 @@ Complete production build:
 
 ## Current Verified Baseline
 
-The current main branch works against this verified baseline (updated 2026-08-07):
+The current main branch works against this verified baseline (updated 2026-08-09):
 
 - Frontend TypeScript validation
 - Backend TypeScript validation
 - 147 frontend tests across 29 test files (Vitest)
-- 270 backend tests across 41 test suites (Jest DB-free unit gate)
+- 295 backend tests across 42 test suites (Jest DB-free unit gate; includes the RAG evaluation harness suite — ledger #18)
 - Team invitation and tenant-isolation security integration tests (CI)
 - Full production build
 - GitHub Actions CI
@@ -263,6 +280,7 @@ The current main branch works against this verified baseline (updated 2026-08-07
 
 ## Recent Improvements
 
+- Added a deterministic RAG evaluation harness (`npm run eval:rag`, ledger #18) measuring retrieval quality with Recall@K and MRR over a synthetic labeled dataset — offline, no AI provider required, runs in CI (see README RAG Evaluation section)
 - Corrected frontend API response handling
 - Added secure team invitation listing
 - Added tenant-isolation integration tests
