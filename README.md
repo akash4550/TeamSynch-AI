@@ -262,6 +262,12 @@ ceiling) and `retryAfterSeconds` (the provider's `retry-after` backoff
 hint when present), so hidden SDK retries — a silent cost and latency
 amplifier — become visible instead of invisible.
 
+Estimated USD cost is written to the existing `AIUsageLog.cost` column
+from provider-reported token usage (`apps/api/src/modules/ai/pricing.ts`,
+per-model list-price rates with a conservative fallback). This is an
+observability estimate for spend monitoring — it is not a billing
+calculation, and MOCK providers estimate to 0 (no fabricated cost).
+
 ### AI usage analytics API
 
 `GET /api/v1/analytics/ai-usage?days=30` (requires `ANALYTICS.VIEW`)

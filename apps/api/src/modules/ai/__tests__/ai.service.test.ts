@@ -118,6 +118,7 @@ describe('AIService', () => {
         promptTokens: 10,
         completionTokens: 5,
         totalTokens: 15,
+        cost: 0, // MOCK provider: no real usage -> no fabricated cost
         latencyMs: expect.any(Number),
         success: true,
         errorMessage: undefined,
@@ -187,6 +188,7 @@ describe('AIService', () => {
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
+        cost: 0,
         latencyMs: expect.any(Number),
         success: false,
         errorMessage: 'AI provider request failed',
@@ -233,6 +235,7 @@ describe('AIService', () => {
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
+        cost: 0,
         latencyMs: expect.any(Number),
         success: false,
         errorMessage:
@@ -616,6 +619,50 @@ describe('AIService', () => {
         'corr-safe-2',
       ),
     ).rejects.toMatchObject({ statusCode: 503 });
+  });
+
+  it('writes an estimated cost for real provider completions', async () => {
+    providerMock.generateCompletion.mockResolvedValue({
+      text: 'answer',
+      usage: { promptTokens: 1_000_000, completionTokens: 1_000_000, totalTokens: 2_000_000 },
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+    });
+    usageCreateMock.mockResolvedValue({});
+
+    await service.generateCompletion(
+      'organization-1',
+      'user-1',
+      'TASK_SUMMARY',
+      { prompt: 'Summarize' },
+    );
+
+    expect(usageCreateMock.mock.calls[0][0].data.cost).toBeCloseTo(0.75, 6);
+  });
+
+  it('writes an estimated cost for real provider embeddings', async () => {
+    // A dedicated provider whose instance name is OPENAI maps to real
+    // rates; the default mock provider intentionally estimates 0.
+    const openAiProviderMock: jest.Mocked<AIProvider> = {
+      name: 'openai',
+      generateCompletion: jest.fn(),
+      generateEmbedding: jest.fn(),
+    };
+    openAiProviderMock.generateEmbedding.mockResolvedValue({
+      embedding: [0.1],
+      model: 'text-embedding-3-small',
+      usage: { totalTokens: 1_000_000 },
+    });
+    const openAiService = new AIService(openAiProviderMock);
+    usageCreateMock.mockResolvedValue({});
+
+    await openAiService.generateEmbedding('chunk', {
+      organizationId: 'organization-1',
+      userId: 'user-1',
+      feature: 'rag_ingest',
+    });
+
+    expect(usageCreateMock.mock.calls[0][0].data.cost).toBeCloseTo(0.02, 6);
   });
 
   it('records embeddings without tenant context under the unknown feature', async () => {
