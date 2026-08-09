@@ -176,6 +176,37 @@ describe('OpenAIProvider', () => {
       providerCode: 'timeout',
     });
   });
+  it('surfaces retry telemetry on rate-limit errors (retry-after + maxRetries)', async () => {
+    const headers = new Headers();
+    headers.set('retry-after', '3');
+    const rateLimitError = new (OpenAI as unknown as { RateLimitError: new (status: number, error: unknown, message?: string, headers?: Headers) => Error }).RateLimitError(
+      429,
+      { message: 'Rate limit reached' },
+      'Rate limit reached',
+      headers,
+    );
+    mockCreate.mockRejectedValue(rateLimitError);
+
+    const provider = new OpenAIProvider({
+      apiKey: 'test-openai-key',
+      model: 'configured-openai-model',
+      timeoutMs: 5000,
+      maxOutputTokens: 100,
+    });
+
+    await expect(
+      provider.generateCompletion({ prompt: 'Hello' }),
+    ).rejects.toMatchObject({
+      name: 'AIProviderError',
+      statusCode: 429,
+      providerCode: 'rate_limit',
+      // SDK retries up to maxRetries (2) internally before surfacing;
+      // the error carries the provider's backoff hint and the ceiling.
+      retryCount: 2,
+      retryAfterSeconds: 3,
+    });
+  });
+
   it('normalizes unknown errors safely', async () => {
     mockCreate.mockRejectedValue(
       new Error('Sensitive raw provider details'),

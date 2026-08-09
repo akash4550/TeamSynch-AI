@@ -167,6 +167,8 @@ export class AIService {
           kind: 'embedding',
           latencyMs,
           providerCode: safeError.providerCode,
+          retryCount: safeError.retryCount,
+          retryAfterSeconds: safeError.retryAfterSeconds,
           providerRequestId: safeError.requestId,
           errorMessage: safeError.message,
         });
@@ -269,6 +271,11 @@ export class AIService {
           kind: 'completion',
           latencyMs,
           providerCode: safeError.providerCode,
+          // Retry observability (ledger #20): the provider's configured
+          // retry ceiling and any retry-after backoff hint, when the
+          // provider surfaced a rate-limit error.
+          retryCount: safeError.retryCount,
+          retryAfterSeconds: safeError.retryAfterSeconds,
           // The upstream provider request id (if the provider exposes
           // one) stays in this structured log — it is NOT written into
           // AIUsageLog.requestId, which now holds the TeamSynch
