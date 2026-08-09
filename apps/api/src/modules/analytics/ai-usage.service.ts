@@ -22,6 +22,7 @@ export interface AIUsageFeatureStats {
   successes: number;
   failures: number;
   totalTokens: number;
+  totalCostUsd: number;
   averageLatencyMs: number | null;
 }
 
@@ -42,6 +43,9 @@ export interface AIUsageSummary {
   failedRequests: number;
   successRate: number;
   totalTokens: number;
+  // Estimated USD spend over the period (from AIUsageLog.cost, populated
+  // by the pricing estimator — observability estimate, not billing).
+  totalCostUsd: number;
   averageLatencyMs: number | null;
   requestsByFeature: AIUsageFeatureStats[];
   requestsByProvider: AIUsageProviderStats[];
@@ -51,6 +55,16 @@ const clampDays = (days: number | undefined): number => {
   if (days === undefined) return AI_USAGE_DEFAULT_DAYS;
   if (!Number.isInteger(days)) return AI_USAGE_DEFAULT_DAYS;
   return Math.min(AI_USAGE_MAX_DAYS, Math.max(1, days));
+};
+
+/** Prisma aggregates Decimal cost as Decimal; normalize to number. */
+const toNumber = (value: unknown): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return value;
+  if (typeof (value as { toNumber?: unknown }).toNumber === 'function') {
+    return (value as { toNumber: () => number }).toNumber();
+  }
+  return 0;
 };
 
 export class AIUsageService {
@@ -83,6 +97,7 @@ export class AIUsageService {
           promptTokens: true,
           completionTokens: true,
           totalTokens: true,
+          cost: true,
         },
         _avg: { latencyMs: true },
       }),
@@ -93,7 +108,7 @@ export class AIUsageService {
         by: ['feature'],
         where,
         _count: { _all: true },
-        _sum: { totalTokens: true },
+        _sum: { totalTokens: true, cost: true },
         _avg: { latencyMs: true },
       }),
       prisma.aIUsageLog.groupBy({
@@ -136,6 +151,7 @@ export class AIUsageService {
           successes,
           failures: requests - successes,
           totalTokens: row._sum.totalTokens ?? 0,
+          totalCostUsd: toNumber(row._sum.cost),
           averageLatencyMs: row._avg.latencyMs ?? null,
         };
       })
@@ -166,6 +182,7 @@ export class AIUsageService {
       failedRequests: totalRequests - totalSuccesses,
       successRate: totalRequests === 0 ? 0 : totalSuccesses / totalRequests,
       totalTokens: totals._sum.totalTokens ?? 0,
+      totalCostUsd: toNumber(totals._sum.cost),
       averageLatencyMs: totals._avg.latencyMs ?? null,
       requestsByFeature,
       requestsByProvider,
