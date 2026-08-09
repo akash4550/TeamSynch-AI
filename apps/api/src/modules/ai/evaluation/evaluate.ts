@@ -19,6 +19,7 @@ import {
   RagEvaluationError,
   RankedCaseInput,
 } from './metrics';
+import { Retriever } from './retrievers/retriever.interface';
 
 /** Small deterministic English stopword list. */
 const STOPWORDS: ReadonlySet<string> = new Set([
@@ -124,16 +125,7 @@ export function runEvaluation(
   topK = 5,
   kValues: readonly number[] = [1, 3, 5],
 ): EvaluationReport {
-  validateDataset(cases, corpus);
-  if (!Number.isInteger(topK) || topK < 1) {
-    throw new RagEvaluationError(`topK must be a positive integer, received ${topK}`);
-  }
-  const ks = normalizeKValues(kValues);
-  if (ks[ks.length - 1] > topK) {
-    throw new RagEvaluationError(
-      `max kValues (${ks[ks.length - 1]}) must not exceed topK (${topK})`,
-    );
-  }
+  const ks = assertEvaluationParams(cases, corpus, topK, kValues);
 
   const inputs: RankedCaseInput[] = cases.map((c) => ({
     caseId: c.id,
@@ -145,12 +137,103 @@ export function runEvaluation(
   return evaluateCases(inputs, ks);
 }
 
+/**
+ * Same evaluation over an injected retriever (e.g. the read-only
+ * pgvector adapter). The default CLI run stays on the deterministic
+ * lexical baseline; this path is opt-in via --retriever vector.
+ */
+export async function runEvaluationWithRetriever(
+  retriever: Retriever,
+  cases: readonly EvaluationCase[] = EVAL_CASES,
+  corpus: readonly CorpusChunk[] = EVAL_CORPUS,
+  topK = 5,
+  kValues: readonly number[] = [1, 3, 5],
+): Promise<EvaluationReport> {
+  const ks = assertEvaluationParams(cases, corpus, topK, kValues);
+
+  const inputs: RankedCaseInput[] = [];
+  for (const c of cases) {
+    inputs.push({
+      caseId: c.id,
+      query: c.query,
+      retrievedIds: await retriever.retrieve(c.query, topK),
+      relevantIds: c.expectedRelevantChunkIds,
+    });
+  }
+
+  return evaluateCases(inputs, ks);
+}
+
+/** Shared validation/normalization for both evaluation entry points. */
+function assertEvaluationParams(
+  cases: readonly EvaluationCase[],
+  corpus: readonly CorpusChunk[],
+  topK: number,
+  kValues: readonly number[],
+): number[] {
+  validateDataset(cases, corpus);
+  if (!Number.isInteger(topK) || topK < 1) {
+    throw new RagEvaluationError(`topK must be a positive integer, received ${topK}`);
+  }
+  const ks = normalizeKValues(kValues);
+  if (ks[ks.length - 1] > topK) {
+    throw new RagEvaluationError(
+      `max kValues (${ks[ks.length - 1]}) must not exceed topK (${topK})`,
+    );
+  }
+  return ks;
+}
+
 /* ------------------------------- CLI -------------------------------- */
 
-const printReport = (report: EvaluationReport): void => {
+interface CliArgs {
+  retriever: 'deterministic' | 'vector';
+  organizationId?: string;
+}
+
+/** Minimal flag parsing: --retriever deterministic|vector, --organization <id>. */
+export function parseCliArgs(argv: readonly string[]): CliArgs {
+  const args: CliArgs = { retriever: 'deterministic' };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    switch (arg) {
+      case '--retriever': {
+        const value = argv[i + 1];
+        i += 1;
+        if (value !== 'deterministic' && value !== 'vector') {
+          throw new RagEvaluationError(`unsupported retriever "${value}" (expected deterministic|vector)`);
+        }
+        args.retriever = value;
+        break;
+      }
+      case '--organization': {
+        const value = argv[i + 1]?.trim();
+        i += 1;
+        if (!value) {
+          throw new RagEvaluationError('--organization requires a value');
+        }
+        args.organizationId = value;
+        break;
+      }
+      default:
+        throw new RagEvaluationError(`unknown flag "${arg}"`);
+    }
+  }
+
+  if (args.retriever === 'vector' && !args.organizationId) {
+    throw new RagEvaluationError('--retriever vector requires --organization <orgId>');
+  }
+  return args;
+}
+
+const printReport = (report: EvaluationReport, retrieverName?: string): void => {
   console.log('RAG Evaluation');
   console.log('==============');
   console.log(`Dataset     : ${EVAL_CORPUS.length} synthetic chunks, ${EVAL_CASES.length} labeled cases`);
+  if (retrieverName) {
+    console.log(`Retriever   : ${retrieverName}`);
+  }
   console.log(`Cases       : ${report.totalCases}`);
   for (const k of report.kValues) {
     console.log(`Recall@${k}    : ${report.meanRecallAtK[k].toFixed(2)}`);
@@ -166,13 +249,31 @@ const printReport = (report: EvaluationReport): void => {
   }
 };
 
+const main = async (): Promise<void> => {
+  const args = parseCliArgs(process.argv.slice(2));
+
+  if (args.retriever === 'vector') {
+    // Lazy-loaded so the default deterministic run never touches
+    // VectorService / prisma (keeps `npm run eval:rag` fully offline).
+    const { VectorRetriever } = await import('./retrievers/vector.retriever');
+    const { VectorService } = await import('../services/vector.service');
+    const retriever = new VectorRetriever(
+      new VectorService(),
+      args.organizationId as string,
+      EVAL_CORPUS,
+    );
+    printReport(await runEvaluationWithRetriever(retriever), retriever.name);
+    return;
+  }
+
+  printReport(runEvaluation());
+};
+
 if (require.main === module) {
-  try {
-    printReport(runEvaluation());
-  } catch (error: unknown) {
+  main().catch((error: unknown) => {
     console.error(
       `[eval:rag] Evaluation failed: ${error instanceof Error ? error.message : String(error)}`,
     );
     process.exit(1);
-  }
+  });
 }
