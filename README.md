@@ -256,6 +256,12 @@ All metrics are served by the existing `/metrics` endpoint (Super Admin)
 and use only bounded labels. Observability is strictly non-fatal: a
 metrics/logging failure never affects the AI request itself.
 
+Provider retries are surfaced on rate-limit failures: the failure
+structured log includes `retryCount` (the provider's configured retry
+ceiling) and `retryAfterSeconds` (the provider's `retry-after` backoff
+hint when present), so hidden SDK retries — a silent cost and latency
+amplifier — become visible instead of invisible.
+
 ## RAG Evaluation
 
 `npm run eval:rag` deterministically measures **retrieval quality** over a

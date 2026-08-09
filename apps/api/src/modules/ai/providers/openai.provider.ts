@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import OpenAI, { RateLimitError as OpenAIRateLimitError } from 'openai';
 import {
   AICompletionRequest,
   AICompletionResponse,
@@ -23,6 +23,11 @@ export interface OpenAIProviderOptions {
 export class OpenAIProvider implements AIProvider {
   readonly name = 'openai';
 
+  // Retry observability (ledger #20): the SDK retries internally up to
+  // this bound; keep in sync with the client's maxRetries so error
+  // telemetry reports the true ceiling.
+  private readonly maxRetries = 2;
+
   private readonly client: OpenAI;
   private readonly model: string;
   private readonly embeddingModel: string;
@@ -32,7 +37,7 @@ export class OpenAIProvider implements AIProvider {
     this.client = new OpenAI({
       apiKey: options.apiKey,
       timeout: options.timeoutMs,
-      maxRetries: 2,
+      maxRetries: this.maxRetries,
       logLevel: 'off',
       ...(options.baseURL ? { baseURL: options.baseURL } : {}),
     });
@@ -42,6 +47,15 @@ export class OpenAIProvider implements AIProvider {
     // (vector(1536)) — see prisma/migrations/20260805010000.
     this.embeddingModel = options.embeddingModel ?? 'text-embedding-3-small';
     this.maxOutputTokens = options.maxOutputTokens;
+  }
+
+  /** Reads the provider's retry-after backoff hint (seconds) when present. */
+  private readRetryAfterSeconds(error: OpenAIRateLimitError): number | undefined {
+    const retryAfterRaw = error.headers?.get('retry-after');
+    if (typeof retryAfterRaw === 'string' && Number.isFinite(Number(retryAfterRaw))) {
+      return Math.max(0, Number(retryAfterRaw));
+    }
+    return undefined;
   }
 
   /*
@@ -127,6 +141,16 @@ export class OpenAIProvider implements AIProvider {
     }
 
     if (error instanceof OpenAI.RateLimitError) {
+      // Retry observability (ledger #20): the OpenAI SDK retries
+      // internally up to maxRetries times before surfacing this error,
+      // but does not expose the actual retry count. What IS observable
+      // from the final error is the provider's backoff signal — the
+      // retry-after header (in seconds) — plus the SDK's configured
+      // maxRetries, which bounds how many internal retries could have
+      // occurred. Both are surfaced in the failure log/metric so
+      // retry amplification is visible instead of silent.
+      const retryAfterSeconds = this.readRetryAfterSeconds(error);
+
       return new AIProviderError(
         'AI provider rate limit exceeded',
         {
@@ -135,6 +159,8 @@ export class OpenAIProvider implements AIProvider {
           statusCode: 429,
           requestId: error.requestID ?? undefined,
           providerCode: error.code ?? 'rate_limit',
+          retryCount: this.maxRetries,
+          retryAfterSeconds,
         },
       );
     }

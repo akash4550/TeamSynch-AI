@@ -202,6 +202,8 @@ describe('AIService', () => {
         statusCode: 429,
         requestId: 'provider-request-123',
         providerCode: 'rate_limit',
+        retryCount: 2,
+        retryAfterSeconds: 30,
       },
     );
 
@@ -248,6 +250,8 @@ describe('AIService', () => {
         kind: 'completion',
         providerCode: 'rate_limit',
         providerRequestId: 'provider-request-123',
+        retryCount: 2,
+        retryAfterSeconds: 30,
       }),
     );
     expect(recordAIErrorMock).toHaveBeenCalledWith(
