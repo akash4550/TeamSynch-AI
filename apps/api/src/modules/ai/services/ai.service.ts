@@ -4,6 +4,13 @@ import {
 import { AIProviderError } from '../providers/ai-provider.error';
 import { prisma } from '../../../config/prisma';
 import { AppError } from '../../../core/errors/AppError';
+import { logger } from '../../../core/utils/logger';
+import {
+  recordAIError,
+  recordAIRequest,
+  recordAIRequestDurationSeconds,
+  recordAITokens,
+} from '../../../core/metrics/aiMetrics';
 import {
   AICompletionRequest,
   AICompletionResponse,
@@ -40,12 +47,23 @@ export class AIService {
     organizationId: string;
     userId: string;
     feature: string;
+    // TeamSynch correlation id (HTTP x-request-id or BullMQ job id) —
+    // persisted as AIUsageLog.requestId. The upstream provider request id
+    // is NEVER stored in that DB field; it surfaces only in the failure
+    // structured log as providerRequestId.
+    correlationId?: string;
   }): Promise<{ embedding: number[]; totalTokens: number }> {
     const startedAt = Date.now();
     const provider = this.resolveProvider();
+    const metricLabels = {
+      feature: ctx?.feature ?? 'unknown',
+      provider,
+      kind: 'embedding' as const,
+    };
 
     try {
       const response = await this.provider.generateEmbedding(text);
+      const latencyMs = Date.now() - startedAt;
 
       // Budget accounting rides AIUsageLog; a logging failure must never
       // break ingestion/search (best-effort, same posture as a dropped
@@ -62,8 +80,9 @@ export class AIService {
               promptTokens: response.usage.totalTokens,
               completionTokens: 0,
               totalTokens: response.usage.totalTokens,
-              latencyMs: Date.now() - startedAt,
+              latencyMs,
               success: true,
+              requestId: ctx.correlationId ?? undefined,
             },
           })
           .catch((logError: unknown) => {
@@ -75,6 +94,26 @@ export class AIService {
           });
       }
 
+      recordAIRequest({ ...metricLabels, result: 'success' });
+      recordAIRequestDurationSeconds(metricLabels, latencyMs / 1000);
+      // Embedding responses expose only total_tokens; do not fabricate a
+      // prompt/completion split.
+      recordAITokens(
+        { ...metricLabels, tokenType: 'total' },
+        response.usage.totalTokens,
+      );
+
+      logger.info('ai.call.completed', {
+        event: 'ai.call.completed',
+        correlationId: ctx?.correlationId,
+        feature: metricLabels.feature,
+        provider,
+        model: response.model,
+        kind: 'embedding',
+        latencyMs,
+        tokens: { total: response.usage.totalTokens },
+      });
+
       return { embedding: response.embedding, totalTokens: response.usage.totalTokens };
     } catch (error: unknown) {
       const safeError =
@@ -85,6 +124,7 @@ export class AIService {
               model: 'unknown',
               statusCode: 502,
             });
+      const latencyMs = Date.now() - startedAt;
 
       if (ctx) {
         await prisma.aIUsageLog
@@ -95,17 +135,38 @@ export class AIService {
               feature: ctx.feature,
               provider,
               model: safeError.model,
-              requestId: safeError.requestId,
+              requestId: ctx.correlationId ?? undefined,
               promptTokens: 0,
               completionTokens: 0,
               totalTokens: 0,
-              latencyMs: Date.now() - startedAt,
+              latencyMs,
               success: false,
               errorMessage: safeError.message,
             },
           })
           .catch(() => undefined);
       }
+
+      recordAIRequest({ ...metricLabels, result: 'failure' });
+      recordAIRequestDurationSeconds(metricLabels, latencyMs / 1000);
+      recordAIError(
+        metricLabels.feature,
+        provider,
+        safeError.providerCode ?? 'unknown',
+      );
+
+      logger.warn('ai.call.failed', {
+        event: 'ai.call.failed',
+        correlationId: ctx?.correlationId,
+        feature: metricLabels.feature,
+        provider,
+        model: safeError.model,
+        kind: 'embedding',
+        latencyMs,
+        providerCode: safeError.providerCode,
+        providerRequestId: safeError.requestId,
+        errorMessage: safeError.message,
+      });
 
       throw safeError;
     }
@@ -116,6 +177,7 @@ export class AIService {
     userId: string,
     feature: string,
     request: AICompletionRequest,
+    correlationId?: string,
   ): Promise<AICompletionResponse> {
     if (!organizationId) {
       throw new AppError(
@@ -158,6 +220,11 @@ export class AIService {
 
     const provider = this.resolveProvider();
     const startedAt = Date.now();
+    const metricLabels = {
+      feature: normalizedFeature,
+      provider,
+      kind: 'completion' as const,
+    };
 
     let response: AICompletionResponse;
 
@@ -178,6 +245,32 @@ export class AIService {
                 statusCode: 502,
               },
             );
+      const latencyMs = Date.now() - startedAt;
+
+      recordAIRequest({ ...metricLabels, result: 'failure' });
+      recordAIRequestDurationSeconds(metricLabels, latencyMs / 1000);
+      recordAIError(
+        normalizedFeature,
+        provider,
+        safeError.providerCode ?? 'unknown',
+      );
+
+      logger.warn('ai.call.failed', {
+        event: 'ai.call.failed',
+        correlationId,
+        feature: normalizedFeature,
+        provider,
+        model: safeError.model,
+        kind: 'completion',
+        latencyMs,
+        providerCode: safeError.providerCode,
+        // The upstream provider request id (if the provider exposes one)
+        // stays in this structured log — it is NOT written into
+        // AIUsageLog.requestId, which now holds the TeamSynch correlation
+        // id exclusively.
+        providerRequestId: safeError.requestId,
+        errorMessage: safeError.message,
+      });
 
       await this.logUsage({
         organizationId,
@@ -185,23 +278,56 @@ export class AIService {
         feature: normalizedFeature,
         provider,
         success: false,
-        latencyMs: Date.now() - startedAt,
+        latencyMs,
         response: null,
         errorMessage: safeError.message,
         model: safeError.model,
-        requestId: safeError.requestId,
+        correlationId,
       });
 
       throw safeError;
     }
+    const latencyMs = Date.now() - startedAt;
+
     await this.logUsage({
       organizationId,
       userId,
       feature: normalizedFeature,
       provider,
       success: true,
-      latencyMs: Date.now() - startedAt,
+      latencyMs,
       response,
+      correlationId,
+    });
+
+    recordAIRequest({ ...metricLabels, result: 'success' });
+    recordAIRequestDurationSeconds(metricLabels, latencyMs / 1000);
+    recordAITokens(
+      { ...metricLabels, tokenType: 'prompt' },
+      response.usage.promptTokens,
+    );
+    recordAITokens(
+      { ...metricLabels, tokenType: 'completion' },
+      response.usage.completionTokens,
+    );
+    recordAITokens(
+      { ...metricLabels, tokenType: 'total' },
+      response.usage.totalTokens,
+    );
+
+    logger.info('ai.call.completed', {
+      event: 'ai.call.completed',
+      correlationId,
+      feature: normalizedFeature,
+      provider,
+      model: response.model,
+      kind: 'completion',
+      latencyMs,
+      tokens: {
+        prompt: response.usage.promptTokens,
+        completion: response.usage.completionTokens,
+        total: response.usage.totalTokens,
+      },
     });
 
     return response;
@@ -236,7 +362,7 @@ export class AIService {
     response,
     errorMessage,
     model,
-    requestId,
+    correlationId,
   }: {
     organizationId: string;
     userId: string;
@@ -247,7 +373,7 @@ export class AIService {
     response: AICompletionResponse | null;
     errorMessage?: string;
     model?: string;
-    requestId?: string;
+    correlationId?: string;
   }): Promise<void> {
     await prisma.aIUsageLog.create({
       data: {
@@ -256,7 +382,7 @@ export class AIService {
         feature,
         provider,
         model: response?.model ?? model ?? 'unknown',
-        requestId,
+        requestId: correlationId,
         promptTokens:
           response?.usage.promptTokens ?? 0,
         completionTokens:
