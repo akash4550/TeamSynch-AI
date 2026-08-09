@@ -24,7 +24,7 @@ describe('AIUsageService', () => {
 
   const emptyTotals = {
     _count: { _all: 0 },
-    _sum: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    _sum: { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0 },
     _avg: { latencyMs: null },
   };
 
@@ -78,7 +78,7 @@ describe('AIUsageService', () => {
   it('merges per-feature success/failure counts, tokens, and latency', async () => {
     aggregateMock.mockResolvedValue({
       _count: { _all: 4 },
-      _sum: { promptTokens: 40, completionTokens: 20, totalTokens: 60 },
+      _sum: { promptTokens: 40, completionTokens: 20, totalTokens: 60, cost: 1.25 },
       _avg: { latencyMs: 250 },
     });
     countMock.mockResolvedValue(3);
@@ -87,13 +87,13 @@ describe('AIUsageService', () => {
       {
         feature: 'RAG_WORKSPACE_CHAT',
         _count: { _all: 3 },
-        _sum: { totalTokens: 50 },
+        _sum: { totalTokens: 50, cost: 1.0 },
         _avg: { latencyMs: 300 },
       },
       {
         feature: 'TASK_SUMMARY',
         _count: { _all: 1 },
-        _sum: { totalTokens: 10 },
+        _sum: { totalTokens: 10, cost: 0.25 },
         _avg: { latencyMs: 100 },
       },
     ];
@@ -125,6 +125,7 @@ describe('AIUsageService', () => {
     expect(summary.failedRequests).toBe(1);
     expect(summary.successRate).toBe(0.75);
     expect(summary.totalTokens).toBe(60);
+    expect(summary.totalCostUsd).toBe(1.25);
     expect(summary.averageLatencyMs).toBe(250);
 
     expect(summary.requestsByFeature).toEqual([
@@ -134,6 +135,7 @@ describe('AIUsageService', () => {
         successes: 2,
         failures: 1,
         totalTokens: 50,
+        totalCostUsd: 1.0,
         averageLatencyMs: 300,
       },
       {
@@ -142,6 +144,7 @@ describe('AIUsageService', () => {
         successes: 0,
         failures: 1,
         totalTokens: 10,
+        totalCostUsd: 0.25,
         averageLatencyMs: 100,
       },
     ]);
@@ -155,9 +158,9 @@ describe('AIUsageService', () => {
     countMock.mockResolvedValue(0);
     groupByMock
       .mockResolvedValueOnce([
-        { feature: 'A', _count: { _all: 1 }, _sum: { totalTokens: 0 }, _avg: { latencyMs: null } },
-        { feature: 'B', _count: { _all: 5 }, _sum: { totalTokens: 0 }, _avg: { latencyMs: null } },
-        { feature: 'C', _count: { _all: 3 }, _sum: { totalTokens: 0 }, _avg: { latencyMs: null } },
+        { feature: 'A', _count: { _all: 1 }, _sum: { totalTokens: 0, cost: 0 }, _avg: { latencyMs: null } },
+        { feature: 'B', _count: { _all: 5 }, _sum: { totalTokens: 0, cost: 0 }, _avg: { latencyMs: null } },
+        { feature: 'C', _count: { _all: 3 }, _sum: { totalTokens: 0, cost: 0 }, _avg: { latencyMs: null } },
       ])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
