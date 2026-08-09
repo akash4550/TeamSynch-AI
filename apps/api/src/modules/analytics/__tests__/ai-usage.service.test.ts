@@ -190,3 +190,115 @@ describe('AIUsageService', () => {
     expect(invalid.periodDays).toBe(AI_USAGE_DEFAULT_DAYS);
   });
 });
+
+describe('AIUsageService platform summary (Super Admin)', () => {
+  const aggregateMock = prisma.aIUsageLog.aggregate as jest.Mock;
+  const countMock = prisma.aIUsageLog.count as jest.Mock;
+  const groupByMock = prisma.aIUsageLog.groupBy as jest.Mock;
+  const service = new AIUsageService();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('aggregates usage across ALL organizations without an org filter', async () => {
+    aggregateMock.mockResolvedValue({
+      _count: { _all: 10 },
+      _sum: { promptTokens: 100, completionTokens: 50, totalTokens: 150, cost: 4.2 },
+      _avg: { latencyMs: 220 },
+    });
+    countMock.mockResolvedValue(8);
+    groupByMock
+      .mockResolvedValueOnce([
+        {
+          organizationId: 'org-a',
+          _count: { _all: 7 },
+          _sum: { totalTokens: 100, cost: 3.5 },
+        },
+        {
+          organizationId: 'org-b',
+          _count: { _all: 3 },
+          _sum: { totalTokens: 50, cost: 0.7 },
+        },
+      ])
+      .mockResolvedValueOnce([
+        { organizationId: 'org-a', _count: { _all: 6 } },
+        { organizationId: 'org-b', _count: { _all: 2 } },
+      ]);
+
+    const summary = await service.getPlatformAIUsageSummary(30);
+
+    // No organizationId in the where clause (platform-wide view).
+    expect(aggregateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({ organizationId: expect.anything() }),
+      }),
+    );
+    expect(summary.totalRequests).toBe(10);
+    expect(summary.successfulRequests).toBe(8);
+    expect(summary.failedRequests).toBe(2);
+    expect(summary.successRate).toBe(0.8);
+    expect(summary.totalTokens).toBe(150);
+    expect(summary.totalCostUsd).toBe(4.2);
+    expect(summary.averageLatencyMs).toBe(220);
+
+    expect(summary.requestsByOrganization).toEqual([
+      {
+        organizationId: 'org-a',
+        requests: 7,
+        successes: 6,
+        failures: 1,
+        totalTokens: 100,
+        totalCostUsd: 3.5,
+      },
+      {
+        organizationId: 'org-b',
+        requests: 3,
+        successes: 2,
+        failures: 1,
+        totalTokens: 50,
+        totalCostUsd: 0.7,
+      },
+    ]);
+  });
+
+  it('sorts organizations by spend descending (highest cost first)', async () => {
+    aggregateMock.mockResolvedValue({
+      _count: { _all: 3 },
+      _sum: { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0 },
+      _avg: { latencyMs: null },
+    });
+    countMock.mockResolvedValue(0);
+    groupByMock
+      .mockResolvedValueOnce([
+        { organizationId: 'low', _count: { _all: 1 }, _sum: { totalTokens: 0, cost: 0.1 } },
+        { organizationId: 'high', _count: { _all: 1 }, _sum: { totalTokens: 0, cost: 9.9 } },
+        { organizationId: 'mid', _count: { _all: 1 }, _sum: { totalTokens: 0, cost: 5.0 } },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const summary = await service.getPlatformAIUsageSummary(30);
+
+    expect(summary.requestsByOrganization.map((o) => o.organizationId)).toEqual([
+      'high',
+      'mid',
+      'low',
+    ]);
+  });
+
+  it('returns an empty org breakdown for an empty period', async () => {
+    aggregateMock.mockResolvedValue({
+      _count: { _all: 0 },
+      _sum: { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0 },
+      _avg: { latencyMs: null },
+    });
+    countMock.mockResolvedValue(0);
+    groupByMock.mockResolvedValue([]);
+
+    const summary = await service.getPlatformAIUsageSummary(7);
+
+    expect(summary.totalRequests).toBe(0);
+    expect(summary.totalCostUsd).toBe(0);
+    expect(summary.requestsByOrganization).toEqual([]);
+  });
+});

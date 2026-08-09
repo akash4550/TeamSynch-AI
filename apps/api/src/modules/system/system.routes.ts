@@ -33,6 +33,15 @@ router.get(
   controller.getMetrics.bind(controller)
 );
 
+// Platform-wide AI usage summary (Super Admin only — operator view of
+// total AI spend across all organizations; see analytics/ai-usage).
+router.get(
+  '/ai-usage',
+  requireAuth,
+  requireRole(Role.SUPER_ADMIN),
+  controller.getPlatformAIUsage.bind(controller)
+);
+
 // Alias for general health
 router.get('/health', controller.checkReadiness.bind(controller));
 
