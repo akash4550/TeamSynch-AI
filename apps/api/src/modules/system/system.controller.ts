@@ -7,7 +7,11 @@ import { metricsRegistry } from '../../core/metrics/httpMetrics';
 import { collectQueueDepths } from '../../core/metrics/queueMetrics';
 import { observeDependencyCheck } from '../../core/metrics/dependencyMetrics';
 import { allQueues } from '../jobs/queues';
+import { AIUsageService } from '../analytics/ai-usage.service';
 export class SystemController {
+
+  private aiUsageService = new AIUsageService();
+
   
   /**
    * Liveness Probe: Returns 200 OK immediately if the HTTP server is accepting requests.
@@ -69,4 +73,21 @@ async getMetrics(req: Request, res: Response) {
   const metrics = await metricsRegistry.metrics();
   res.status(200).send(metrics);
 }
+
+  /**
+   * Platform-wide AI usage summary (Super Admin only). Complements the
+   * org-scoped analytics endpoint with the operator view: total platform
+   * spend and a per-organization breakdown over the trailing window.
+   */
+  async getPlatformAIUsage(req: Request, res: Response) {
+    const daysRaw = req.query.days;
+    const days =
+      typeof daysRaw === 'string' && daysRaw.trim() !== ''
+        ? Number(daysRaw)
+        : undefined;
+
+    const summary = await this.aiUsageService.getPlatformAIUsageSummary(days);
+
+    res.status(200).json({ data: summary });
+  }
 }

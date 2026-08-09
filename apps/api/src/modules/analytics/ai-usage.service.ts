@@ -33,6 +33,31 @@ export interface AIUsageProviderStats {
   failures: number;
 }
 
+/** Per-organization spend/usage row for the platform (Super Admin) view. */
+export interface AIUsageOrgRow {
+  organizationId: string;
+  requests: number;
+  successes: number;
+  failures: number;
+  totalTokens: number;
+  totalCostUsd: number;
+}
+
+/** Platform-wide AI usage summary (all orgs — Super Admin only). */
+export interface PlatformAIUsageSummary {
+  periodDays: number;
+  periodStart: string;
+  periodEnd: string;
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  successRate: number;
+  totalTokens: number;
+  totalCostUsd: number;
+  averageLatencyMs: number | null;
+  requestsByOrganization: AIUsageOrgRow[];
+}
+
 export interface AIUsageSummary {
   organizationId: string;
   periodDays: number;
@@ -186,6 +211,86 @@ export class AIUsageService {
       averageLatencyMs: totals._avg.latencyMs ?? null,
       requestsByFeature,
       requestsByProvider,
+    };
+  }
+
+  /**
+   * Platform-wide AI usage summary across ALL organizations over the
+   * trailing window. INTENTIONALLY org-unscoped — this is the Super
+   * Admin operator view (total platform spend, per-tenant breakdown);
+   * regular tenants must use getAIUsageSummary (org-scoped).
+   */
+  async getPlatformAIUsageSummary(
+    days?: number,
+  ): Promise<PlatformAIUsageSummary> {
+    const periodDays = clampDays(days);
+    const periodEnd = new Date();
+    const periodStart = new Date(
+      periodEnd.getTime() - periodDays * 24 * 60 * 60 * 1000,
+    );
+    const where = { createdAt: { gte: periodStart } };
+
+    const [totals, totalSuccesses, byOrgAll, byOrgSuccess] = await Promise.all([
+      prisma.aIUsageLog.aggregate({
+        where,
+        _count: { _all: true },
+        _sum: {
+          promptTokens: true,
+          completionTokens: true,
+          totalTokens: true,
+          cost: true,
+        },
+        _avg: { latencyMs: true },
+      }),
+      prisma.aIUsageLog.count({ where: { ...where, success: true } }),
+      prisma.aIUsageLog.groupBy({
+        by: ['organizationId'],
+        where,
+        _count: { _all: true },
+        _sum: { totalTokens: true, cost: true },
+      }),
+      prisma.aIUsageLog.groupBy({
+        by: ['organizationId'],
+        where: { ...where, success: true },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const successByOrg = new Map(
+      byOrgSuccess.map((row) => [row.organizationId, row._count._all ?? 0]),
+    );
+
+    const requestsByOrganization: AIUsageOrgRow[] = byOrgAll
+      .map((row) => {
+        const requests = row._count._all ?? 0;
+        const successes = successByOrg.get(row.organizationId) ?? 0;
+        return {
+          organizationId: row.organizationId,
+          requests,
+          successes,
+          failures: requests - successes,
+          totalTokens: row._sum.totalTokens ?? 0,
+          totalCostUsd: toNumber(row._sum.cost),
+        };
+      })
+      // Highest spend first — the operator's first question is "which
+      // tenant costs the most?".
+      .sort((a, b) => b.totalCostUsd - a.totalCostUsd || b.requests - a.requests);
+
+    const totalRequests = totals._count._all ?? 0;
+
+    return {
+      periodDays,
+      periodStart: periodStart.toISOString(),
+      periodEnd: periodEnd.toISOString(),
+      totalRequests,
+      successfulRequests: totalSuccesses,
+      failedRequests: totalRequests - totalSuccesses,
+      successRate: totalRequests === 0 ? 0 : totalSuccesses / totalRequests,
+      totalTokens: totals._sum.totalTokens ?? 0,
+      totalCostUsd: toNumber(totals._sum.cost),
+      averageLatencyMs: totals._avg.latencyMs ?? null,
+      requestsByOrganization,
     };
   }
 }

@@ -283,6 +283,11 @@ estimator), average latency, plus per-feature and per-provider
 breakdowns. It answers "which AI features does this org actually use,
 and are they healthy?" from the existing usage table — no new schema.
 
+`GET /api/v1/system/ai-usage?days=30` (Super Admin only) is the platform
+operator view: total AI spend across ALL organizations plus a
+per-organization breakdown sorted by spend, so the most expensive
+tenants are visible at a glance.
+
 ## RAG Evaluation
 
 `npm run eval:rag` deterministically measures **retrieval quality** over a
