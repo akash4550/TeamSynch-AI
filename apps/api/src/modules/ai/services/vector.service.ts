@@ -201,6 +201,7 @@ export class VectorService {
     queryText: string,
     limit = 5,
     actingUserId?: string,
+    correlationId?: string,
   ): Promise<SimilaritySearchResponse> {
     const trimmed = queryText.trim();
 
@@ -219,7 +220,7 @@ export class VectorService {
       let embeddingError: AIProviderError | null = null;
       try {
         const embedded = await this.aiService.generateEmbedding(trimmed, actingUserId
-          ? { organizationId, userId: actingUserId, feature: 'rag_query' }
+          ? { organizationId, userId: actingUserId, feature: 'rag_query', correlationId }
           : undefined);
         queryEmbedding = embedded.embedding;
       } catch (error: unknown) {

@@ -8,6 +8,13 @@ import {
   AIProvider,
 } from '../providers/ai-provider.interface';
 import { AIService } from '../services/ai.service';
+import { logger } from '../../../core/utils/logger';
+import {
+  recordAIError,
+  recordAIRequest,
+  recordAIRequestDurationSeconds,
+  recordAITokens,
+} from '../../../core/metrics/aiMetrics';
 
 jest.mock('../../../config/prisma', () => ({
   prisma: {
@@ -17,10 +24,33 @@ jest.mock('../../../config/prisma', () => ({
   },
 }));
 
+jest.mock('../../../core/utils/logger', () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
+jest.mock('../../../core/metrics/aiMetrics', () => ({
+  recordAIRequest: jest.fn(),
+  recordAIRequestDurationSeconds: jest.fn(),
+  recordAITokens: jest.fn(),
+  recordAIError: jest.fn(),
+}));
+
 describe('AIService', () => {
   let providerMock: jest.Mocked<AIProvider>;
   let usageCreateMock: jest.Mock;
   let service: AIService;
+
+  const recordAIRequestMock = recordAIRequest as jest.Mock;
+  const recordAIDurationMock = recordAIRequestDurationSeconds as jest.Mock;
+  const recordAITokensMock = recordAITokens as jest.Mock;
+  const recordAIErrorMock = recordAIError as jest.Mock;
+  const loggerInfoMock = logger.info as jest.Mock;
+  const loggerWarnMock = logger.warn as jest.Mock;
 
   const completionResponse:
     AICompletionResponse = {
@@ -163,7 +193,7 @@ describe('AIService', () => {
       },
     });
   });
-  it('logs safe provider metadata on failures', async () => {
+  it('logs safe provider metadata on failures (provider request id stays in the structured log)', async () => {
     const providerError = new AIProviderError(
       'AI provider rate limit exceeded',
       {
@@ -198,7 +228,6 @@ describe('AIService', () => {
         feature: 'WORKSPACE_ASSISTANT',
         provider: PrismaAIProvider.MOCK,
         model: 'provider-model-v1',
-        requestId: 'provider-request-123',
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
@@ -207,6 +236,30 @@ describe('AIService', () => {
         errorMessage:
           'AI provider rate limit exceeded',
       },
+    });
+
+    // The upstream provider request id is NOT persisted into
+    // AIUsageLog.requestId (that field is reserved for the TeamSynch
+    // correlation id); it surfaces in the structured failure log instead.
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      'ai.call.failed',
+      expect.objectContaining({
+        event: 'ai.call.failed',
+        kind: 'completion',
+        providerCode: 'rate_limit',
+        providerRequestId: 'provider-request-123',
+      }),
+    );
+    expect(recordAIErrorMock).toHaveBeenCalledWith(
+      'WORKSPACE_ASSISTANT',
+      PrismaAIProvider.MOCK,
+      'rate_limit',
+    );
+    expect(recordAIRequestMock).toHaveBeenCalledWith({
+      feature: 'WORKSPACE_ASSISTANT',
+      provider: PrismaAIProvider.MOCK,
+      kind: 'completion',
+      result: 'failure',
     });
   });
 
@@ -356,6 +409,227 @@ describe('AIService', () => {
       providerMock.generateCompletion,
     ).not.toHaveBeenCalled();
 
+    expect(usageCreateMock).not.toHaveBeenCalled();
+  });
+
+  it('persists the application correlation id as AIUsageLog.requestId on success', async () => {
+    providerMock.generateCompletion.mockResolvedValue(completionResponse);
+    usageCreateMock.mockResolvedValue({});
+
+    await service.generateCompletion(
+      'organization-1',
+      'user-1',
+      'TASK_SUMMARY',
+      { prompt: 'Summarize this task' },
+      'corr-http-42',
+    );
+
+    expect(usageCreateMock.mock.calls[0][0].data.requestId).toBe('corr-http-42');
+    expect(usageCreateMock.mock.calls[0][0].data.success).toBe(true);
+  });
+
+  it('records completion success metrics and a structured success log', async () => {
+    providerMock.generateCompletion.mockResolvedValue(completionResponse);
+    usageCreateMock.mockResolvedValue({});
+    const labels = { feature: 'TASK_SUMMARY', provider: PrismaAIProvider.MOCK, kind: 'completion' };
+
+    await service.generateCompletion(
+      'organization-1',
+      'user-1',
+      'TASK_SUMMARY',
+      { prompt: 'Summarize this task' },
+      'corr-1',
+    );
+
+    expect(recordAIRequestMock).toHaveBeenCalledWith({ ...labels, result: 'success' });
+    expect(recordAIDurationMock).toHaveBeenCalledWith(labels, expect.any(Number));
+    // Provider-reported token totals, split by token type.
+    expect(recordAITokensMock).toHaveBeenCalledWith({ ...labels, tokenType: 'prompt' }, 10);
+    expect(recordAITokensMock).toHaveBeenCalledWith({ ...labels, tokenType: 'completion' }, 5);
+    expect(recordAITokensMock).toHaveBeenCalledWith({ ...labels, tokenType: 'total' }, 15);
+    expect(loggerInfoMock).toHaveBeenCalledWith(
+      'ai.call.completed',
+      expect.objectContaining({
+        event: 'ai.call.completed',
+        correlationId: 'corr-1',
+        feature: 'TASK_SUMMARY',
+        provider: PrismaAIProvider.MOCK,
+        model: 'mock-model-v1',
+        kind: 'completion',
+        latencyMs: expect.any(Number),
+        tokens: { prompt: 10, completion: 5, total: 15 },
+      }),
+    );
+  });
+
+  it('records completion failure metrics, correlation id, and provider diagnostics', async () => {
+    const providerError = new AIProviderError('AI provider rate limit exceeded', {
+      provider: 'mock',
+      model: 'provider-model-v1',
+      statusCode: 429,
+      requestId: 'provider-request-123',
+      providerCode: 'rate_limit',
+    });
+    providerMock.generateCompletion.mockRejectedValue(providerError);
+    usageCreateMock.mockResolvedValue({});
+
+    await expect(
+      service.generateCompletion(
+        'organization-1',
+        'user-1',
+        'WORKSPACE_ASSISTANT',
+        { prompt: 'Question' },
+        'corr-2',
+      ),
+    ).rejects.toBe(providerError);
+
+    const labels = { feature: 'WORKSPACE_ASSISTANT', provider: PrismaAIProvider.MOCK, kind: 'completion' };
+    expect(recordAIRequestMock).toHaveBeenCalledWith({ ...labels, result: 'failure' });
+    expect(recordAIDurationMock).toHaveBeenCalledWith(labels, expect.any(Number));
+    expect(recordAIErrorMock).toHaveBeenCalledWith('WORKSPACE_ASSISTANT', PrismaAIProvider.MOCK, 'rate_limit');
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      'ai.call.failed',
+      expect.objectContaining({
+        event: 'ai.call.failed',
+        correlationId: 'corr-2',
+        kind: 'completion',
+        providerCode: 'rate_limit',
+        providerRequestId: 'provider-request-123',
+      }),
+    );
+    // TeamSynch correlation id persisted; provider id NOT persisted.
+    expect(usageCreateMock.mock.calls[0][0].data.requestId).toBe('corr-2');
+    expect(usageCreateMock.mock.calls[0][0].data.success).toBe(false);
+  });
+
+  it('records embedding success metrics, token total, and correlation id', async () => {
+    providerMock.generateEmbedding.mockResolvedValue({
+      embedding: [0.1, 0.2],
+      model: 'text-embedding-3-small',
+      usage: { totalTokens: 42 },
+    });
+    usageCreateMock.mockResolvedValue({});
+    const labels = { feature: 'rag_query', provider: PrismaAIProvider.MOCK, kind: 'embedding' };
+
+    const result = await service.generateEmbedding('chunk text', {
+      organizationId: 'organization-1',
+      userId: 'user-1',
+      feature: 'rag_query',
+      correlationId: 'corr-embed-1',
+    });
+
+    expect(result.totalTokens).toBe(42);
+    expect(usageCreateMock.mock.calls[0][0].data.requestId).toBe('corr-embed-1');
+    expect(usageCreateMock.mock.calls[0][0].data.success).toBe(true);
+    expect(recordAIRequestMock).toHaveBeenCalledWith({ ...labels, result: 'success' });
+    // Embeddings expose only a total; no prompt/completion split invented.
+    expect(recordAITokensMock).toHaveBeenCalledWith({ ...labels, tokenType: 'total' }, 42);
+    expect(loggerInfoMock).toHaveBeenCalledWith(
+      'ai.call.completed',
+      expect.objectContaining({
+        event: 'ai.call.completed',
+        correlationId: 'corr-embed-1',
+        kind: 'embedding',
+        model: 'text-embedding-3-small',
+        tokens: { total: 42 },
+      }),
+    );
+  });
+
+  it('records embedding failure metrics and failure log with provider diagnostics', async () => {
+    providerMock.generateEmbedding.mockRejectedValue(
+      new AIProviderError('Embedding provider rate limited', {
+        provider: 'mock',
+        model: 'text-embedding-3-small',
+        statusCode: 429,
+        requestId: 'provider-embed-7',
+        providerCode: 'rate_limit',
+      }),
+    );
+    usageCreateMock.mockResolvedValue({});
+    const labels = { feature: 'rag_query', provider: PrismaAIProvider.MOCK, kind: 'embedding' };
+
+    await expect(
+      service.generateEmbedding('chunk text', {
+        organizationId: 'organization-1',
+        userId: 'user-1',
+        feature: 'rag_query',
+        correlationId: 'corr-embed-2',
+      }),
+    ).rejects.toMatchObject({ statusCode: 429 });
+
+    expect(recordAIRequestMock).toHaveBeenCalledWith({ ...labels, result: 'failure' });
+    expect(recordAIErrorMock).toHaveBeenCalledWith('rag_query', PrismaAIProvider.MOCK, 'rate_limit');
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      'ai.call.failed',
+      expect.objectContaining({
+        event: 'ai.call.failed',
+        correlationId: 'corr-embed-2',
+        kind: 'embedding',
+        providerCode: 'rate_limit',
+        providerRequestId: 'provider-embed-7',
+      }),
+    );
+    expect(usageCreateMock.mock.calls[0][0].data.requestId).toBe('corr-embed-2');
+    expect(usageCreateMock.mock.calls[0][0].data.success).toBe(false);
+  });
+
+  it('never lets an observability failure break the AI call itself', async () => {
+    providerMock.generateCompletion.mockResolvedValue(completionResponse);
+    usageCreateMock.mockResolvedValue({});
+    // Metrics-recording failure: the completion must still succeed.
+    recordAIRequestMock.mockImplementation(() => {
+      throw new Error('prometheus unavailable');
+    });
+
+    const result = await service.generateCompletion(
+      'organization-1',
+      'user-1',
+      'TASK_SUMMARY',
+      { prompt: 'Summarize this task' },
+      'corr-safe-1',
+    );
+
+    expect(result).toEqual(completionResponse);
+    expect(usageCreateMock).toHaveBeenCalledTimes(1);
+
+    // Same guarantee on the failure path: observability failing must not
+    // mask the original provider error.
+    providerMock.generateCompletion.mockRejectedValue(
+      new AIProviderError('provider down', {
+        provider: 'mock',
+        model: 'm',
+        statusCode: 503,
+      }),
+    );
+
+    await expect(
+      service.generateCompletion(
+        'organization-1',
+        'user-1',
+        'WORKSPACE_ASSISTANT',
+        { prompt: 'Question' },
+        'corr-safe-2',
+      ),
+    ).rejects.toMatchObject({ statusCode: 503 });
+  });
+
+  it('records embeddings without tenant context under the unknown feature', async () => {
+    providerMock.generateEmbedding.mockResolvedValue({
+      embedding: [1],
+      model: 'm',
+      usage: { totalTokens: 7 },
+    });
+
+    await service.generateEmbedding('bare text');
+
+    expect(recordAIRequestMock).toHaveBeenCalledWith({
+      feature: 'unknown',
+      provider: PrismaAIProvider.MOCK,
+      kind: 'embedding',
+      result: 'success',
+    });
+    // No tenant context -> no AIUsageLog row (existing contract preserved).
     expect(usageCreateMock).not.toHaveBeenCalled();
   });
 });

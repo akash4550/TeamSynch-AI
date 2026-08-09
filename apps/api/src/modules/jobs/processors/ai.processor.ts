@@ -44,7 +44,9 @@ export const aiProcessor = async (job: Job<AICompletionJobData>) => {
     ? `User Query: ${query}\n\nRelevant Context:\n${promptContext}`
     : `${PROMPTS.FEATURES.TASK_SUMMARY}\n\n${promptContext}`;
 
-  // Execute LLM completion with token/cost tracking inside AIService
+  // Execute LLM completion with token/cost tracking inside AIService.
+  // The BullMQ job id is the correlation id for background AI work (the
+  // equivalent of the HTTP x-request-id on request-driven paths).
   const completionResponse = await aiService.generateCompletion(
     organizationId,
     userId,
@@ -52,7 +54,8 @@ export const aiProcessor = async (job: Job<AICompletionJobData>) => {
     {
       systemPrompt: PROMPTS.SYSTEM.DEFAULT_ASSISTANT,
       prompt: userPrompt,
-    }
+    },
+    job.id ? String(job.id) : undefined
   );
 
   /*
