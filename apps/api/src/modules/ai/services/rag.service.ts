@@ -1,6 +1,10 @@
 import { VectorService } from './vector.service';
 import { AIService } from './ai.service';
 import { PROMPTS } from '../prompts';
+import {
+  recordRagRetrieval,
+  recordRagStageDuration,
+} from '../../../core/metrics/aiMetrics';
 
 export interface RAGAnswerResponse {
   answer: string;
@@ -35,8 +39,23 @@ export class RAGService {
     //    (feature 'rag_query') — the previous code embedded with no tenant
     //    or user attribution at all. An embedding-provider outage surfaces
     //    as an honest 503 (see VectorService) instead of fabricated results.
-    const { chunks: relevantChunks, retrievalMethod } =
-      await this.vectorService.similaritySearch(organizationId, query, 5, userId, correlationId);
+    //    (ledger #19): the retrieval stage is timed and the retrieval
+    //    method recorded — real pgvector vs lexical fallback share.
+    // Retrieval duration is recorded even when retrieval FAILS, so a
+    // degraded search path is visible in Prometheus instead of silently
+    // vanishing — the original error still propagates unchanged.
+    const retrievalStartedAt = Date.now();
+    let retrievalMethod: 'vector' | 'text_fallback' = 'text_fallback';
+    let relevantChunks: Awaited<ReturnType<VectorService['similaritySearch']>>['chunks'] = [];
+    try {
+      const search = await this.vectorService.similaritySearch(organizationId, query, 5, userId, correlationId);
+      retrievalMethod = search.retrievalMethod;
+      relevantChunks = search.chunks;
+    } finally {
+      recordRagStageDuration('retrieval', (Date.now() - retrievalStartedAt) / 1000);
+    }
+
+    recordRagRetrieval(retrievalMethod);
 
     // 2. Build augmented prompt context from retrieved chunks
     const contextSnippets = relevantChunks
@@ -45,7 +64,10 @@ export class RAGService {
 
     const augmentedPrompt = `User Question: ${query}\n\nRetrieved Workspace Sources:\n${contextSnippets || 'No direct matching document chunks found.'}`;
 
-    // 3. Generate LLM completion using Provider Factory
+    // 3. Generate LLM completion using Provider Factory. (ledger #19): the
+    //    generation stage is timed separately so retrieval vs generation
+    //    latency can be compared in Prometheus.
+    const generationStartedAt = Date.now();
     const completion = await this.aiService.generateCompletion(
       organizationId,
       userId,
@@ -56,6 +78,9 @@ export class RAGService {
       },
       correlationId,
     );
+    const generationLatencyMs = Date.now() - generationStartedAt;
+
+    recordRagStageDuration('generation', generationLatencyMs / 1000);
 
     // 4. Map citations — relevance only exists for real vector distances.
     const citations = relevantChunks.map((c) => ({

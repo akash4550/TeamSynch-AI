@@ -236,6 +236,26 @@ Backend unit tests (DB-free gate — no Postgres/Redis required):
 
 `npm test --workspace apps/api`
 
+## AI Observability
+
+Every AI provider call (completions and embeddings) emits Prometheus
+metrics (`teamsynch_ai_requests_total`,
+`teamsynch_ai_request_duration_seconds`, `teamsynch_ai_tokens_total`,
+`teamsynch_ai_errors_total`), one structured log line per call, and an
+`AIUsageLog` row correlated to the originating request via
+`AIUsageLog.requestId` (HTTP `x-request-id` or the BullMQ job id).
+RAG chat additionally tracks retrieval-method share and stage latency:
+
+- `teamsynch_ai_rag_retrievals_total{retrieval_method="vector"|"text_fallback"}`
+  — what share of RAG queries is served by real pgvector cosine search
+  vs the lexical fallback.
+- `teamsynch_ai_rag_stage_duration_seconds{kind="retrieval"|"generation"}`
+  — where RAG latency goes.
+
+All metrics are served by the existing `/metrics` endpoint (Super Admin)
+and use only bounded labels. Observability is strictly non-fatal: a
+metrics/logging failure never affects the AI request itself.
+
 ## RAG Evaluation
 
 `npm run eval:rag` deterministically measures **retrieval quality** over a
