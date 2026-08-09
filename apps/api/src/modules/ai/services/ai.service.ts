@@ -17,6 +17,7 @@ import {
   AIProvider,
 } from '../providers/ai-provider.interface';
 import { createAIProvider } from '../providers/ai-provider.factory';
+import { estimateCostUsd } from '../pricing';
 
 export class AIService {
   private readonly provider: AIProvider;
@@ -80,6 +81,12 @@ export class AIService {
               promptTokens: response.usage.totalTokens,
               completionTokens: 0,
               totalTokens: response.usage.totalTokens,
+              cost: estimateCostUsd({
+                provider: this.provider.name,
+                model: response.model,
+                promptTokens: response.usage.totalTokens,
+                completionTokens: 0,
+              }),
               latencyMs,
               success: true,
               requestId: ctx.correlationId ?? undefined,
@@ -403,6 +410,19 @@ export class AIService {
     model?: string;
     correlationId?: string;
   }): Promise<void> {
+    // Estimated USD cost rides the provider-reported token usage (see
+    // pricing.ts). Only populated on success — failures have no usage
+    // payload, and MOCK providers estimate to 0 (no fabricated cost).
+    const cost =
+      success && response
+        ? estimateCostUsd({
+            provider: response.provider,
+            model: response.model,
+            promptTokens: response.usage.promptTokens,
+            completionTokens: response.usage.completionTokens,
+          })
+        : 0;
+
     await prisma.aIUsageLog.create({
       data: {
         organizationId,
@@ -417,6 +437,7 @@ export class AIService {
           response?.usage.completionTokens ?? 0,
         totalTokens:
           response?.usage.totalTokens ?? 0,
+        cost,
         latencyMs,
         success,
         errorMessage,
