@@ -16,6 +16,7 @@
     "build:api": "npm run generate --workspace=api && npm run build --workspace=api",
     "build:web": "npm run build --workspace=web",
     "test": "npm run test --workspace=api",
+    "eval:rag": "npm run eval:rag --workspace=api",
     "docker:build": "docker compose -f docker-compose.production.yml build api web",
     "smoke:prepare-auth": "node scripts/prepare-production-auth-smoke.mjs",
     "smoke:production": "node scripts/smoke-production.mjs",
