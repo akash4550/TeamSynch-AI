@@ -289,6 +289,24 @@ Ranking uses an in-memory deterministic lexical baseline — no database, no
 AI provider, no API keys — so the command is offline and safe in CI. It
 exits non-zero only on harness errors, not on benchmark scores.
 
+### Measuring the real retrieval path (optional)
+
+The harness ships a read-only adapter over the existing
+`VectorService.similaritySearch` (pgvector cosine with the existing
+lexical fallback) that implements the same retriever contract, so the
+same labeled dataset can score the REAL retrieval path:
+
+```bash
+npm run eval:rag --workspace=api -- --retriever vector --organization <scratchOrgId>
+```
+
+This requires the synthetic corpus to be ingested into a scratch
+organization's `DocumentEmbedding` store through the normal document
+pipeline, plus a configured embedding provider — it is opt-in and never
+run in CI. Retrieved rows are mapped back to the dataset's synthetic
+chunk ids by exact normalized content match; nothing about production
+retrieval is modified.
+
 Backend integration suites (boot the full app; require PostgreSQL on `127.0.0.1:55433` and Redis on `127.0.0.1:56379` — see `apps/api/src/test/setup-env.ts`):
 
 `npm run test:integration --workspace apps/api`
