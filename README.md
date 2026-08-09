@@ -268,6 +268,11 @@ per-model list-price rates with a conservative fallback). This is an
 observability estimate for spend monitoring — it is not a billing
 calculation, and MOCK providers estimate to 0 (no fabricated cost).
 
+AI endpoints are rate-limited at 300 requests/15 min per client IP
+(separate from the generic API budget) as an abuse/cost backstop on
+token-spending routes; the per-org entitlement quota remains the primary
+spending gate.
+
 ### AI usage analytics API
 
 `GET /api/v1/analytics/ai-usage?days=30` (requires `ANALYTICS.VIEW`)
