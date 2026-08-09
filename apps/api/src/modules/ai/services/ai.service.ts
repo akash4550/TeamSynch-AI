@@ -10,6 +10,7 @@ import {
   recordAIRequest,
   recordAIRequestDurationSeconds,
   recordAITokens,
+  recordAICostUsd,
 } from '../../../core/metrics/aiMetrics';
 import {
   AICompletionRequest,
@@ -109,6 +110,17 @@ export class AIService {
         recordAITokens(
           { ...metricLabels, tokenType: 'total' },
           response.usage.totalTokens,
+        );
+        // Spend as a Prometheus counter (estimate from the same pricing
+        // table; MOCK estimates 0 and records nothing).
+        recordAICostUsd(
+          metricLabels,
+          estimateCostUsd({
+            provider: this.provider.name,
+            model: response.model,
+            promptTokens: response.usage.totalTokens,
+            completionTokens: 0,
+          }),
         );
 
         logger.info('ai.call.completed', {
@@ -334,6 +346,17 @@ export class AIService {
       recordAITokens(
         { ...metricLabels, tokenType: 'total' },
         response.usage.totalTokens,
+      );
+      // Spend as a Prometheus counter (estimate from the same pricing
+      // table; MOCK estimates 0 and records nothing).
+      recordAICostUsd(
+        metricLabels,
+        estimateCostUsd({
+          provider: response.provider,
+          model: response.model,
+          promptTokens: response.usage.promptTokens,
+          completionTokens: response.usage.completionTokens,
+        }),
       );
 
       logger.info('ai.call.completed', {

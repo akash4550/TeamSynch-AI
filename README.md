@@ -241,7 +241,9 @@ Backend unit tests (DB-free gate — no Postgres/Redis required):
 Every AI provider call (completions and embeddings) emits Prometheus
 metrics (`teamsynch_ai_requests_total`,
 `teamsynch_ai_request_duration_seconds`, `teamsynch_ai_tokens_total`,
-`teamsynch_ai_errors_total`), one structured log line per call, and an
+`teamsynch_ai_errors_total`, `teamsynch_ai_cost_usd_total` — estimated
+spend as a counter so it can be charted/alerted over time), one
+structured log line per call, and an
 `AIUsageLog` row correlated to the originating request via
 `AIUsageLog.requestId` (HTTP `x-request-id` or the BullMQ job id).
 RAG chat additionally tracks retrieval-method share and stage latency:

@@ -14,6 +14,7 @@ import {
   recordAIRequest,
   recordAIRequestDurationSeconds,
   recordAITokens,
+  recordAICostUsd,
 } from '../../../core/metrics/aiMetrics';
 
 jest.mock('../../../config/prisma', () => ({
@@ -38,6 +39,7 @@ jest.mock('../../../core/metrics/aiMetrics', () => ({
   recordAIRequestDurationSeconds: jest.fn(),
   recordAITokens: jest.fn(),
   recordAIError: jest.fn(),
+  recordAICostUsd: jest.fn(),
 }));
 
 describe('AIService', () => {
@@ -48,6 +50,7 @@ describe('AIService', () => {
   const recordAIRequestMock = recordAIRequest as jest.Mock;
   const recordAIDurationMock = recordAIRequestDurationSeconds as jest.Mock;
   const recordAITokensMock = recordAITokens as jest.Mock;
+  const recordAICostMock = recordAICostUsd as jest.Mock;
   const recordAIErrorMock = recordAIError as jest.Mock;
   const loggerInfoMock = logger.info as jest.Mock;
   const loggerWarnMock = logger.warn as jest.Mock;
@@ -622,6 +625,9 @@ describe('AIService', () => {
   });
 
   it('writes an estimated cost for real provider completions', async () => {
+    // Neutralize implementations leaked by earlier tests (clearAllMocks
+    // does not reset mock implementations).
+    recordAIRequestMock.mockImplementation(() => undefined);
     providerMock.generateCompletion.mockResolvedValue({
       text: 'answer',
       usage: { promptTokens: 1_000_000, completionTokens: 1_000_000, totalTokens: 2_000_000 },
@@ -638,6 +644,31 @@ describe('AIService', () => {
     );
 
     expect(usageCreateMock.mock.calls[0][0].data.cost).toBeCloseTo(0.75, 6);
+    // The same estimate is recorded as a Prometheus cost counter under
+    // the CONFIGURED provider label (resolveProvider), with the cost
+    // derived from the response's provider/model rates.
+    expect(recordAICostMock).toHaveBeenCalledWith(
+      { feature: 'TASK_SUMMARY', provider: PrismaAIProvider.MOCK, kind: 'completion' },
+      expect.closeTo(0.75, 6),
+    );
+  });
+
+  it('records no Prometheus cost for mock completions (estimate is 0)', async () => {
+    recordAIRequestMock.mockImplementation(() => undefined);
+    providerMock.generateCompletion.mockResolvedValue(completionResponse);
+    usageCreateMock.mockResolvedValue({});
+
+    await service.generateCompletion(
+      'organization-1',
+      'user-1',
+      'TASK_SUMMARY',
+      { prompt: 'Summarize' },
+    );
+
+    expect(recordAICostMock).toHaveBeenCalledWith(
+      { feature: 'TASK_SUMMARY', provider: PrismaAIProvider.MOCK, kind: 'completion' },
+      0,
+    );
   });
 
   it('writes an estimated cost for real provider embeddings', async () => {

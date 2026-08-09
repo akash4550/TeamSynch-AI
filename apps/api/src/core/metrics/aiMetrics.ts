@@ -156,3 +156,33 @@ export function recordAIError(
   aiErrorsTotal.inc({ feature, provider, code });
 }
 
+/* ---------------- AI cost observability (ledger #25) ----------------
+ * Estimated USD spend as a Prometheus counter so spend can be charted
+ * and alerted on over time (rate() of the counter), complementing the
+ * AIUsageLog.cost column and the analytics endpoints. Values come from
+ * the same pricing estimator and are estimates, not billing. MOCK
+ * providers estimate 0 and record nothing.
+ */
+
+export const aiCostUsdTotal = new Counter({
+  name: 'teamsynch_ai_cost_usd_total',
+  help: 'Estimated USD spend on AI provider calls, by feature, provider and kind',
+  labelNames: ['feature', 'provider', 'kind'],
+  registers: [metricsRegistry],
+});
+
+export function recordAICostUsd(
+  labels: AILabels,
+  costUsd: number,
+): void {
+  if (!Number.isFinite(costUsd) || costUsd <= 0) return;
+  aiCostUsdTotal.inc(
+    {
+      feature: labels.feature,
+      provider: labels.provider,
+      kind: labels.kind,
+    },
+    costUsd,
+  );
+}
+

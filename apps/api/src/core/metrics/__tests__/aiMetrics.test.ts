@@ -7,12 +7,14 @@
 
 import { metricsRegistry } from '../httpMetrics';
 import {
+  aiCostUsdTotal,
   aiErrorsTotal,
   aiRequestDurationSeconds,
   aiRequestsTotal,
   aiTokensTotal,
   ragRetrievalsTotal,
   ragStageDurationSeconds,
+  recordAICostUsd,
   recordAIError,
   recordAIRequest,
   recordAIRequestDurationSeconds,
@@ -29,6 +31,7 @@ describe('aiMetrics', () => {
     aiErrorsTotal.reset();
     ragRetrievalsTotal.reset();
     ragStageDurationSeconds.reset();
+    aiCostUsdTotal.reset();
   });
 
   it('renders only bounded labels (no correlation/user/tenant labels)', async () => {
@@ -174,5 +177,30 @@ describe('aiMetrics', () => {
     expect(output).toContain(
       'teamsynch_ai_rag_stage_duration_seconds_sum{kind="generation"} 3.5',
     );
+  });
+
+  it('accumulates estimated cost by feature/provider/kind', async () => {
+    recordAICostUsd({ feature: 'RAG_WORKSPACE_CHAT', provider: 'OPENAI', kind: 'completion' }, 0.5);
+    recordAICostUsd({ feature: 'RAG_WORKSPACE_CHAT', provider: 'OPENAI', kind: 'completion' }, 0.25);
+    recordAICostUsd({ feature: 'rag_ingest', provider: 'OPENAI', kind: 'embedding' }, 0.02);
+
+    const output = await metricsRegistry.metrics();
+    expect(output).toContain(
+      'teamsynch_ai_cost_usd_total{feature="RAG_WORKSPACE_CHAT",provider="OPENAI",kind="completion"} 0.75',
+    );
+    expect(output).toContain(
+      'teamsynch_ai_cost_usd_total{feature="rag_ingest",provider="OPENAI",kind="embedding"} 0.02',
+    );
+  });
+
+  it('ignores non-positive or non-finite cost values (no series recorded)', async () => {
+    recordAICostUsd({ feature: 'RAG_WORKSPACE_CHAT', provider: 'MOCK', kind: 'completion' }, 0);
+    recordAICostUsd({ feature: 'RAG_WORKSPACE_CHAT', provider: 'MOCK', kind: 'completion' }, -1);
+    recordAICostUsd({ feature: 'RAG_WORKSPACE_CHAT', provider: 'MOCK', kind: 'completion' }, Number.NaN);
+
+    const output = await metricsRegistry.metrics();
+    // HELP/TYPE lines may render for the registered metric, but no data
+    // series must exist.
+    expect(output).not.toContain('teamsynch_ai_cost_usd_total{');
   });
 });
