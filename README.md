@@ -307,6 +307,13 @@ Ranking uses an in-memory deterministic lexical baseline — no database, no
 AI provider, no API keys — so the command is offline and safe in CI. It
 exits non-zero only on harness errors, not on benchmark scores.
 
+Optional regression gate: set `RAG_EVAL_MIN_MRR` and/or
+`RAG_EVAL_MIN_RECALL_AT_5` (e.g. `RAG_EVAL_MIN_MRR=0.80 npm run eval:rag`)
+to fail the command when the deterministic baseline drops below the
+floors — useful in CI to catch dataset or retriever regressions. The
+floors are relative to this synthetic baseline, not a claim about
+production retrieval quality.
+
 ### Measuring the real retrieval path (optional)
 
 The harness ships a read-only adapter over the existing

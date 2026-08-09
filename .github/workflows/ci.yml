@@ -71,9 +71,14 @@ jobs:
 
       - name: Run deterministic RAG evaluation harness
         # ledger #18: fully offline deterministic run over the synthetic
-        # dataset (no database, no AI provider, no API keys). Exits
-        # non-zero only on harness errors — it does not gate on scores.
+        # dataset (no database, no AI provider, no API keys).
+        # ledger #26: regression gate — floors sit below the measured
+        # baseline (MRR 0.85, Recall@5 0.90) so CI fails only on a real
+        # dataset/retriever regression, not on normal variance.
         run: npm run eval:rag
+        env:
+          RAG_EVAL_MIN_MRR: '0.80'
+          RAG_EVAL_MIN_RECALL_AT_5: '0.85'
 
       - name: Run frontend authentication tests
         run: npm run test --workspace=web

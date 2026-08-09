@@ -205,3 +205,30 @@ describe('evaluation runner (deterministic lexical baseline)', () => {
     expect(() => validateDataset(badCase, EVAL_CORPUS)).toThrow(/at least one id/);
   });
 });
+
+describe('regression gate (ledger #26)', () => {
+  const { meetsRegressionFloors, runEvaluation } = require('../evaluate');
+
+  it('passes the shipped dataset against the CI floors (0.80 / 0.85)', () => {
+    const report = runEvaluation();
+    expect(meetsRegressionFloors(report, 0.8, 0.85)).toBe(true);
+  });
+
+  it('fails when a floor is above the measured baseline', () => {
+    const report = runEvaluation();
+    // Baseline: MRR 0.85, Recall@5 0.90 — a 0.95 floor must fail.
+    expect(meetsRegressionFloors(report, 0.95, 0.95)).toBe(false);
+  });
+
+  it('treats unset floors as unenforced', () => {
+    const report = runEvaluation();
+    expect(meetsRegressionFloors(report, undefined, undefined)).toBe(true);
+    expect(meetsRegressionFloors(report, 0.99, undefined)).toBe(false);
+    expect(meetsRegressionFloors(report, undefined, 0.99)).toBe(false);
+  });
+
+  it('passes with permissive floors (no false alarm)', () => {
+    const report = runEvaluation();
+    expect(meetsRegressionFloors(report, 0, 0)).toBe(true);
+  });
+});
