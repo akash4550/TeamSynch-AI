@@ -262,6 +262,16 @@ ceiling) and `retryAfterSeconds` (the provider's `retry-after` backoff
 hint when present), so hidden SDK retries — a silent cost and latency
 amplifier — become visible instead of invisible.
 
+### AI usage analytics API
+
+`GET /api/v1/analytics/ai-usage?days=30` (requires `ANALYTICS.VIEW`)
+returns an org-scoped summary of `AIUsageLog` activity over the trailing
+window (`days` 1–90, default 30): total/successful/failed requests,
+success rate, total tokens, average latency, plus per-feature and
+per-provider breakdowns. It answers "which AI features does this org
+actually use, and are they healthy?" from the existing usage table —
+no new schema.
+
 ## RAG Evaluation
 
 `npm run eval:rag` deterministically measures **retrieval quality** over a
