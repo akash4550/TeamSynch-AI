@@ -33,6 +33,16 @@ export interface AIUsageProviderStats {
   failures: number;
 }
 
+/** Per-user usage/cost row for the org-scoped AI usage summary. */
+export interface AIUsageUserRow {
+  userId: string;
+  requests: number;
+  successes: number;
+  failures: number;
+  totalTokens: number;
+  totalCostUsd: number;
+}
+
 /** Per-organization spend/usage row for the platform (Super Admin) view. */
 export interface AIUsageOrgRow {
   organizationId: string;
@@ -74,6 +84,7 @@ export interface AIUsageSummary {
   averageLatencyMs: number | null;
   requestsByFeature: AIUsageFeatureStats[];
   requestsByProvider: AIUsageProviderStats[];
+  requestsByUser: AIUsageUserRow[];
 }
 
 const clampDays = (days: number | undefined): number => {
@@ -114,6 +125,8 @@ export class AIUsageService {
       byFeatureSuccess,
       byProviderAll,
       byProviderSuccess,
+      byUserAll,
+      byUserSuccess,
     ] = await Promise.all([
       prisma.aIUsageLog.aggregate({
         where,
@@ -151,6 +164,17 @@ export class AIUsageService {
         where: { ...where, success: true },
         _count: { _all: true },
       }),
+      prisma.aIUsageLog.groupBy({
+        by: ['userId'],
+        where,
+        _count: { _all: true },
+        _sum: { totalTokens: true, cost: true },
+      }),
+      prisma.aIUsageLog.groupBy({
+        by: ['userId'],
+        where: { ...where, success: true },
+        _count: { _all: true },
+      }),
     ]);
 
     const successByFeature = new Map(
@@ -162,6 +186,12 @@ export class AIUsageService {
     const successByProvider = new Map(
       byProviderSuccess.map((row) => [
         row.provider,
+        row._count._all ?? 0,
+      ]),
+    );
+    const successByUser = new Map(
+      byUserSuccess.map((row) => [
+        row.userId,
         row._count._all ?? 0,
       ]),
     );
@@ -195,6 +225,23 @@ export class AIUsageService {
       })
       .sort((a, b) => b.requests - a.requests);
 
+    const requestsByUser: AIUsageUserRow[] = byUserAll
+      .map((row) => {
+        const requests = row._count._all ?? 0;
+        const successes = successByUser.get(row.userId) ?? 0;
+        return {
+          userId: row.userId,
+          requests,
+          successes,
+          failures: requests - successes,
+          totalTokens: row._sum.totalTokens ?? 0,
+          totalCostUsd: toNumber(row._sum.cost),
+        };
+      })
+      // Highest spend first — "which user is burning tokens?" is the
+      // operator's first question for cost attribution.
+      .sort((a, b) => b.totalCostUsd - a.totalCostUsd || b.requests - a.requests);
+
     const totalRequests = totals._count._all ?? 0;
 
     return {
@@ -211,6 +258,7 @@ export class AIUsageService {
       averageLatencyMs: totals._avg.latencyMs ?? null,
       requestsByFeature,
       requestsByProvider,
+      requestsByUser,
     };
   }
 

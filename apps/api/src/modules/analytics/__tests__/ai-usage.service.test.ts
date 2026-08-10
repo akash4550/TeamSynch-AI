@@ -112,11 +112,21 @@ describe('AIUsageService', () => {
 
     // groupBy is called 4 times: feature all, feature success, provider
     // all, provider success — in that order.
+    const userAll = [
+      { userId: 'user-1', _count: { _all: 3 }, _sum: { totalTokens: 50, cost: 1.0 } },
+      { userId: 'user-2', _count: { _all: 1 }, _sum: { totalTokens: 10, cost: 0.25 } },
+    ];
+    const userSuccess = [
+      { userId: 'user-1', _count: { _all: 2 } },
+      { userId: 'user-2', _count: { _all: 0 } },
+    ];
     groupByMock
       .mockResolvedValueOnce(featureRows)
       .mockResolvedValueOnce(successRows)
       .mockResolvedValueOnce(providerAll)
-      .mockResolvedValueOnce(providerSuccess);
+      .mockResolvedValueOnce(providerSuccess)
+      .mockResolvedValueOnce(userAll)
+      .mockResolvedValueOnce(userSuccess);
 
     const summary = await service.getAIUsageSummary('org-1');
 
@@ -151,6 +161,24 @@ describe('AIUsageService', () => {
     expect(summary.requestsByProvider).toEqual([
       { provider: 'OPENAI', requests: 4, successes: 3, failures: 1 },
     ]);
+    expect(summary.requestsByUser).toEqual([
+      {
+        userId: 'user-1',
+        requests: 3,
+        successes: 2,
+        failures: 1,
+        totalTokens: 50,
+        totalCostUsd: 1.0,
+      },
+      {
+        userId: 'user-2',
+        requests: 1,
+        successes: 0,
+        failures: 1,
+        totalTokens: 10,
+        totalCostUsd: 0.25,
+      },
+    ]);
   });
 
   it('sorts features and providers by request count descending', async () => {
@@ -167,12 +195,15 @@ describe('AIUsageService', () => {
         { provider: 'MOCK', _count: { _all: 2 } },
         { provider: 'OPENAI', _count: { _all: 9 } },
       ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
     const summary = await service.getAIUsageSummary('org-1');
 
     expect(summary.requestsByFeature.map((f) => f.feature)).toEqual(['B', 'C', 'A']);
     expect(summary.requestsByProvider.map((p) => p.provider)).toEqual(['OPENAI', 'MOCK']);
+    expect(summary.requestsByUser).toEqual([]);
   });
 
   it('clamps the period to the documented bounds', async () => {
@@ -300,5 +331,83 @@ describe('AIUsageService platform summary (Super Admin)', () => {
     expect(summary.totalRequests).toBe(0);
     expect(summary.totalCostUsd).toBe(0);
     expect(summary.requestsByOrganization).toEqual([]);
+  });
+});
+
+describe('AIUsageService per-user breakdown', () => {
+  const aggregateMock = prisma.aIUsageLog.aggregate as jest.Mock;
+  const countMock = prisma.aIUsageLog.count as jest.Mock;
+  const groupByMock = prisma.aIUsageLog.groupBy as jest.Mock;
+  const service = new AIUsageService();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    aggregateMock.mockResolvedValue({
+      _count: { _all: 4 },
+      _sum: { promptTokens: 0, completionTokens: 0, totalTokens: 60, cost: 1.25 },
+      _avg: { latencyMs: 200 },
+    });
+    countMock.mockResolvedValue(3);
+  });
+
+  it('merges per-user usage with successes and cost, scoped to the org', async () => {
+    groupByMock
+      .mockResolvedValueOnce([]) // feature all
+      .mockResolvedValueOnce([]) // feature success
+      .mockResolvedValueOnce([]) // provider all
+      .mockResolvedValueOnce([]) // provider success
+      .mockResolvedValueOnce([
+        { userId: 'u-1', _count: { _all: 3 }, _sum: { totalTokens: 45, cost: 0.9 } },
+        { userId: 'u-2', _count: { _all: 1 }, _sum: { totalTokens: 15, cost: 0.35 } },
+      ])
+      .mockResolvedValueOnce([
+        { userId: 'u-1', _count: { _all: 3 } },
+      ]);
+
+    const summary = await service.getAIUsageSummary('org-42');
+
+    expect(summary.requestsByUser).toEqual([
+      {
+        userId: 'u-1',
+        requests: 3,
+        successes: 3,
+        failures: 0,
+        totalTokens: 45,
+        totalCostUsd: 0.9,
+      },
+      {
+        userId: 'u-2',
+        requests: 1,
+        successes: 0,
+        failures: 1,
+        totalTokens: 15,
+        totalCostUsd: 0.35,
+      },
+    ]);
+
+    // Both user groupBys are org-scoped.
+    for (const call of groupByMock.mock.calls) {
+      if (call[0].by?.[0] === 'userId') {
+        expect(call[0].where.organizationId).toBe('org-42');
+      }
+    }
+  });
+
+  it('sorts users by spend descending (highest cost first)', async () => {
+    groupByMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { userId: 'cheap', _count: { _all: 1 }, _sum: { totalTokens: 0, cost: 0.05 } },
+        { userId: 'spendy', _count: { _all: 1 }, _sum: { totalTokens: 0, cost: 8.4 } },
+        { userId: 'mid', _count: { _all: 1 }, _sum: { totalTokens: 0, cost: 2.0 } },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const summary = await service.getAIUsageSummary('org-42');
+
+    expect(summary.requestsByUser.map((u) => u.userId)).toEqual(['spendy', 'mid', 'cheap']);
   });
 });
