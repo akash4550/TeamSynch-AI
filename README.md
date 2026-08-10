@@ -281,9 +281,11 @@ spending gate.
 returns an org-scoped summary of `AIUsageLog` activity over the trailing
 window (`days` 1–90, default 30): total/successful/failed requests,
 success rate, total tokens, estimated total cost (USD, from the pricing
-estimator), average latency, plus per-feature and per-provider
-breakdowns. It answers "which AI features does this org actually use,
-and are they healthy?" from the existing usage table — no new schema.
+estimator), average latency, plus per-feature, per-provider, and
+per-user breakdowns (users sorted by spend, so "which user is burning
+tokens?" is answered at a glance). It answers "which AI features does
+this org actually use, and are they healthy?" from the existing usage
+table — no new schema.
 
 `GET /api/v1/system/ai-usage?days=30` (Super Admin only) is the platform
 operator view: total AI spend across ALL organizations plus a
