@@ -228,6 +228,24 @@ export const classifyDocumentIngest = (
 export const isIngestibleDocument = (mimeType: string, originalName: string): boolean =>
   classifyDocumentIngest(mimeType, originalName) !== null;
 
+/**
+ * RAG budget gate (ledger #27 — extracted pure for unit testing).
+ * Mirrors the previous inline check exactly:
+ *   - spent >= budget AND pending embeds -> skip (block ingestion)
+ *   - spent >= budget but NOTHING to embed -> allow the zero-spend
+ *     reconcile (spending nothing to index is never blocked)
+ *   - budget spent below the cap -> allow
+ * Extracted from ragIngestionProcessor so the cost-control critical
+ * path is deterministically testable without a database.
+ */
+export function isRagBudgetExhausted(
+  budget: number,
+  spent: number,
+  pendingEmbeds: number,
+): boolean {
+  return spent >= budget && pendingEmbeds > 0;
+}
+
 /** UTF-8 decode + strip bytes that poison embeddings/lexical search. */
 const decodeTextBytes = (buffer: Buffer): string =>
   sanitizeExtractedText(buffer.toString('utf8'));
@@ -429,7 +447,7 @@ export const ragIngestionProcessor = async (job: { name: string; data: RagIngest
   });
   const spent = spentRow._sum.totalTokens ?? 0;
 
-  if (spent >= budget && pendingEmbeds > 0) {
+  if (isRagBudgetExhausted(budget, spent, pendingEmbeds)) {
     logger.warn(
       `[RagIngest] Monthly RAG token budget (${budget}) exhausted for org ${organizationId} with ${pendingEmbeds} new chunks to embed — ingestion deferred`,
     );
