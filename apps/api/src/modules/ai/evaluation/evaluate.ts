@@ -252,6 +252,9 @@ const printReport = (report: EvaluationReport, retrieverName?: string): void => 
 const main = async (): Promise<void> => {
   const args = parseCliArgs(process.argv.slice(2));
 
+  let report: EvaluationReport;
+  let retrieverName: string | undefined;
+
   if (args.retriever === 'vector') {
     // Lazy-loaded so the default deterministic run never touches
     // VectorService / prisma (keeps `npm run eval:rag` fully offline).
@@ -262,12 +265,66 @@ const main = async (): Promise<void> => {
       args.organizationId as string,
       EVAL_CORPUS,
     );
-    printReport(await runEvaluationWithRetriever(retriever), retriever.name);
-    return;
+    report = await runEvaluationWithRetriever(retriever);
+    retrieverName = retriever.name;
+  } else {
+    report = runEvaluation();
   }
 
-  printReport(runEvaluation());
+  printReport(report, retrieverName);
+
+  // Regression gate (ledger #26): when RAG_EVAL_MIN_MRR / RAG_EVAL_MIN_RECALL_AT_5
+  // are set (e.g. in CI), fail the run if the scores drop below the floor.
+  // Off by default so the command remains informational for local use;
+  // floors are relative to the deterministic baseline, NOT a claim about
+  // production retrieval quality.
+  const minMrr = parseOptionalEnvNumber('RAG_EVAL_MIN_MRR');
+  const minRecallAt5 = parseOptionalEnvNumber('RAG_EVAL_MIN_RECALL_AT_5');
+  if (minMrr !== undefined || minRecallAt5 !== undefined) {
+    if (!meetsRegressionFloors(report, minMrr, minRecallAt5)) {
+      const maxK = report.kValues[report.kValues.length - 1];
+      const recallAtMaxK = report.meanRecallAtK[maxK] ?? 0;
+      console.error(
+        `[eval:rag] REGRESSION: MRR ${report.mrr.toFixed(3)} (floor ${minMrr ?? 'unset'}), ` +
+          `Recall@${maxK} ${recallAtMaxK.toFixed(3)} (floor ${minRecallAt5 ?? 'unset'})`,
+      );
+      process.exit(1);
+    }
+    const maxK = report.kValues[report.kValues.length - 1];
+    console.log(
+      `Thresholds  : MRR >= ${minMrr ?? 'unset'} AND Recall@${maxK} >= ${minRecallAt5 ?? 'unset'} — PASS`,
+    );
+  }
 };
+
+/** Parses an optional env number (undefined when unset/empty). */
+function parseOptionalEnvNumber(name: string): number | undefined {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new RagEvaluationError(`${name} must be a number between 0 and 1`);
+  }
+  return value;
+}
+
+/**
+ * Regression gate result for the CLI (ledger #26). Exported for tests.
+ * Returns true when every set floor is met; a floor is only enforced
+ * when the corresponding min value is defined.
+ */
+export function meetsRegressionFloors(
+  report: EvaluationReport,
+  minMrr?: number,
+  minRecallAt5?: number,
+): boolean {
+  if (minMrr === undefined && minRecallAt5 === undefined) return true;
+  const maxK = report.kValues[report.kValues.length - 1];
+  const recallAtMaxK = report.meanRecallAtK[maxK] ?? 0;
+  const mrrOk = minMrr === undefined || report.mrr >= minMrr;
+  const recallOk = minRecallAt5 === undefined || recallAtMaxK >= minRecallAt5;
+  return mrrOk && recallOk;
+}
 
 if (require.main === module) {
   main().catch((error: unknown) => {
