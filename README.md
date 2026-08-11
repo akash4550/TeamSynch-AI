@@ -344,15 +344,17 @@ Complete production build:
 
 ## Current Verified Baseline
 
-The current main branch works against this verified baseline (updated 2026-08-09):
+The current main branch works against this verified baseline (updated 2026-08-10):
 
 - Frontend TypeScript validation
 - Backend TypeScript validation
 - 147 frontend tests across 29 test files (Vitest)
-- 295 backend tests across 42 test suites (Jest DB-free unit gate; includes the RAG evaluation harness suite — ledger #18)
+- 413 backend tests across 59 test suites (Jest DB-free unit gate; includes the RAG evaluation harness, AI observability, cost estimation, analytics, and route-validation suites)
+- Deterministic RAG evaluation harness (`npm run eval:rag`) with a CI regression gate
+- AI observability: Prometheus metrics, structured logs, request correlation, retry and cost telemetry, org + platform usage analytics
 - Team invitation and tenant-isolation security integration tests (CI)
 - Full production build
-- GitHub Actions CI
+- GitHub Actions CI (typecheck, tests, vulnerability scan, production smoke)
 - CodeQL analysis
 - Netlify deployment checks
 - Production API liveness and readiness checks
@@ -361,6 +363,7 @@ The current main branch works against this verified baseline (updated 2026-08-09
 
 ## Recent Improvements
 
+- AI observability stack (ledgers #18–#33): RAG evaluation harness with CI regression gate; Prometheus metrics for AI requests, latency, tokens, errors, spend, and RAG stage timing; structured per-call logs with request correlation; provider retry and rate-limit telemetry; estimated USD cost per call; org-scoped, per-user, and platform-wide usage analytics; AI endpoint rate limiting; comprehensive AI/LLM test coverage
 - Added a deterministic RAG evaluation harness (`npm run eval:rag`, ledger #18) measuring retrieval quality with Recall@K and MRR over a synthetic labeled dataset — offline, no AI provider required, runs in CI (see README RAG Evaluation section)
 - Corrected frontend API response handling
 - Added secure team invitation listing
