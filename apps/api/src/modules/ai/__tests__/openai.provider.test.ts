@@ -207,6 +207,56 @@ describe('OpenAIProvider', () => {
     });
   });
 
+  it('normalizes connection errors to 503 connection_error', async () => {
+    const ConnectionError = (OpenAI as unknown as { APIConnectionError: new (opts: { message?: string }) => Error }).APIConnectionError;
+    mockCreate.mockRejectedValue(new ConnectionError({ message: 'network down' }));
+
+    const provider = new OpenAIProvider({
+      apiKey: 'test-openai-key',
+      model: 'configured-openai-model',
+      timeoutMs: 5000,
+      maxOutputTokens: 100,
+    });
+
+    await expect(
+      provider.generateCompletion({ prompt: 'Hello' }),
+    ).rejects.toMatchObject({
+      name: 'AIProviderError',
+      message: 'AI provider is temporarily unavailable',
+      statusCode: 503,
+      providerCode: 'connection_error',
+      provider: 'openai',
+      model: 'configured-openai-model',
+    });
+  });
+
+  it('normalizes generic API errors to 502 with request id and code', async () => {
+    const headers = new Headers();
+    headers.set('x-request-id', 'req-abc-123');
+    const ApiError = (OpenAI as unknown as { APIError: new (status: number, error: unknown, message?: string, headers?: Headers) => Error }).APIError;
+    mockCreate.mockRejectedValue(
+      new ApiError(400, { code: 'invalid_prompt' }, 'bad prompt', headers),
+    );
+
+    const provider = new OpenAIProvider({
+      apiKey: 'test-openai-key',
+      model: 'configured-openai-model',
+      timeoutMs: 5000,
+      maxOutputTokens: 100,
+    });
+
+    await expect(
+      provider.generateCompletion({ prompt: 'Hello' }),
+    ).rejects.toMatchObject({
+      name: 'AIProviderError',
+      message: 'AI provider request failed',
+      statusCode: 502,
+      providerCode: 'invalid_prompt',
+      requestId: 'req-abc-123',
+      provider: 'openai',
+    });
+  });
+
   it('normalizes unknown errors safely', async () => {
     mockCreate.mockRejectedValue(
       new Error('Sensitive raw provider details'),
