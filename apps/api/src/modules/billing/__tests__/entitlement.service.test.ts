@@ -72,6 +72,68 @@ describe('EntitlementService', () => {
         message: expect.stringContaining('Plan quota exceeded'),
       });
     });
+
+    describe('AI_REQUEST (the AI cost-control gate)', () => {
+      const mockOrg = (plan: string) => ({
+        id: 'org-1',
+        name: 'Test Org',
+        plan,
+        subscriptionStatus: 'ACTIVE',
+      });
+
+      it('allows an AI request when the monthly count is below the quota', async () => {
+        (prisma.organization.findFirst as jest.Mock).mockResolvedValue(mockOrg('FREE'));
+        (prisma.aIUsageLog.count as jest.Mock).mockResolvedValue(49); // 49 of 50
+
+        await expect(service.checkEntitlement('org-1', 'AI_REQUEST')).resolves.not.toThrow();
+      });
+
+      it('blocks at the exact quota boundary (50/50 for FREE) with 403', async () => {
+        (prisma.organization.findFirst as jest.Mock).mockResolvedValue(mockOrg('FREE'));
+        (prisma.aIUsageLog.count as jest.Mock).mockResolvedValue(50);
+
+        await expect(service.checkEntitlement('org-1', 'AI_REQUEST')).rejects.toMatchObject({
+          statusCode: 403,
+          message: expect.stringContaining('Monthly limit of 50 AI requests'),
+        });
+      });
+
+      it('blocks when the quota is exceeded', async () => {
+        (prisma.organization.findFirst as jest.Mock).mockResolvedValue(mockOrg('FREE'));
+        (prisma.aIUsageLog.count as jest.Mock).mockResolvedValue(51);
+
+        await expect(service.checkEntitlement('org-1', 'AI_REQUEST')).rejects.toMatchObject({
+          statusCode: 403,
+          message: expect.stringContaining('Monthly limit of 50 AI requests'),
+        });
+      });
+
+      it('counts only this month (createdAt >= start of month) for the gate', async () => {
+        (prisma.organization.findFirst as jest.Mock).mockResolvedValue(mockOrg('FREE'));
+        (prisma.aIUsageLog.count as jest.Mock).mockResolvedValue(10);
+
+        await service.checkEntitlement('org-1', 'AI_REQUEST');
+
+        const countCall = (prisma.aIUsageLog.count as jest.Mock).mock.calls[0][0];
+        expect(countCall.where.organizationId).toBe('org-1');
+        expect(countCall.where.createdAt).toEqual(
+          expect.objectContaining({ gte: expect.any(Date) }),
+        );
+      });
+
+      it('scales the gate with the plan (STARTER allows 500)', async () => {
+        (prisma.organization.findFirst as jest.Mock).mockResolvedValue(mockOrg('STARTER'));
+        (prisma.aIUsageLog.count as jest.Mock).mockResolvedValue(499);
+
+        await expect(service.checkEntitlement('org-1', 'AI_REQUEST')).resolves.not.toThrow();
+
+        (prisma.aIUsageLog.count as jest.Mock).mockResolvedValue(500);
+        await expect(service.checkEntitlement('org-1', 'AI_REQUEST')).rejects.toMatchObject({
+          statusCode: 403,
+          message: expect.stringContaining('Monthly limit of 500 AI requests'),
+        });
+      });
+    });
   });
 
   describe('getSubscriptionUsage', () => {
