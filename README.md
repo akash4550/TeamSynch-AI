@@ -432,6 +432,7 @@ Do not report vulnerabilities through public GitHub issues. Follow the process i
 - Product vision: `PRODUCT_VISION.md`
 - Architecture decision record: `ADR-001-Modular-Monolith.md`
 - Security policy: `SECURITY.md`
+- LLMOps (RAG pipeline, observability, evaluation, cost control): `docs/llmops.md`
 
 ## License
 
