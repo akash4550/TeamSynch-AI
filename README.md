@@ -433,6 +433,7 @@ Do not report vulnerabilities through public GitHub issues. Follow the process i
 - Architecture decision record: `ADR-001-Modular-Monolith.md`
 - Security policy: `SECURITY.md`
 - LLMOps (RAG pipeline, observability, evaluation, cost control): `docs/llmops.md`
+- AI alerting guide (PromQL rules for the AI metrics): `docs/ai-alerting.md`
 
 ## License
 
