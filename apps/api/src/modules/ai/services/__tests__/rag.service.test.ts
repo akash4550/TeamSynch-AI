@@ -97,3 +97,119 @@ describe('RAGService observability', () => {
     expect(recordStageMock).toHaveBeenCalledWith('retrieval', expect.any(Number));
   });
 });
+
+describe('RAGService core contract (askRAGQuestion)', () => {
+  const vectorSearchMock = jest.fn();
+  const completionMock = jest.fn();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (VectorService as unknown as jest.Mock).mockImplementation(() => ({
+      similaritySearch: vectorSearchMock,
+    }));
+    (AIService as unknown as jest.Mock).mockImplementation(() => ({
+      generateCompletion: completionMock,
+    }));
+  });
+
+  it('builds the augmented prompt with numbered sources and a strict system prompt', async () => {
+    vectorSearchMock.mockResolvedValue({
+      chunks: [
+        { id: 'c1', documentId: 'doc-1', contentChunk: 'chunk alpha', distance: 0.1 },
+        { id: 'c2', documentId: 'doc-2', contentChunk: 'chunk beta', distance: 0.4 },
+      ],
+      retrievalMethod: 'vector',
+    });
+    completionMock.mockResolvedValue({
+      text: 'the answer',
+      usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+      provider: 'mock',
+      model: 'mock-model-v1',
+    });
+
+    const service = new RAGService();
+    const result = await service.askRAGQuestion('org-1', 'user-1', 'What is alpha?');
+
+    const completionCall = completionMock.mock.calls[0];
+    expect(completionCall[2]).toBe('RAG_WORKSPACE_CHAT');
+    expect(completionCall[3].prompt).toContain('User Question: What is alpha?');
+    expect(completionCall[3].prompt).toContain('[Source 1]:\nchunk alpha');
+    expect(completionCall[3].prompt).toContain('[Source 2]:\nchunk beta');
+    expect(completionCall[3].systemPrompt).toContain(
+      'Answer the user question strictly using the provided Retrieved Workspace Sources. Cite source numbers when making factual assertions.',
+    );
+    expect(completionCall[4]).toBeUndefined(); // no correlation id passed
+
+    expect(result.answer).toBe('the answer');
+    expect(result.retrievalMethod).toBe('vector');
+  });
+
+  it('maps citations with real relevance scores for vector retrieval', async () => {
+    vectorSearchMock.mockResolvedValue({
+      chunks: [
+        { id: 'c1', documentId: 'doc-1', contentChunk: 'a'.repeat(200), distance: 0.1 },
+        { id: 'c2', documentId: 'doc-2', contentChunk: 'short chunk', distance: 0.5 },
+      ],
+      retrievalMethod: 'vector',
+    });
+    completionMock.mockResolvedValue({
+      text: 'answer',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      provider: 'mock',
+      model: 'mock-model-v1',
+    });
+
+    const service = new RAGService();
+    const result = await service.askRAGQuestion('org-1', 'user-1', 'q');
+
+    // (1 - 0.1) * 100 = 90, (1 - 0.5) * 100 = 50
+    expect(result.citations).toEqual([
+      { documentId: 'doc-1', snippet: 'a'.repeat(150) + '...', relevanceScore: 90 },
+      { documentId: 'doc-2', snippet: 'short chunk...', relevanceScore: 50 },
+    ]);
+  });
+
+  it('keeps relevanceScore null for lexical fallback (no fabricated percentage)', async () => {
+    // Ledger #9: distance is null in the fallback -> relevanceScore MUST
+    // be null (the old code pinned 0.2 -> a fabricated "80% Match").
+    vectorSearchMock.mockResolvedValue({
+      chunks: [{ id: 'c1', documentId: 'doc-1', contentChunk: 'fallback hit', distance: null }],
+      retrievalMethod: 'text_fallback',
+    });
+    completionMock.mockResolvedValue({
+      text: 'answer',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      provider: 'mock',
+      model: 'mock-model-v1',
+    });
+
+    const service = new RAGService();
+    const result = await service.askRAGQuestion('org-1', 'user-1', 'q');
+
+    expect(result.retrievalMethod).toBe('text_fallback');
+    expect(result.citations).toEqual([
+      { documentId: 'doc-1', snippet: 'fallback hit...', relevanceScore: null },
+    ]);
+  });
+
+  it('handles empty retrieval with an honest no-sources prompt', async () => {
+    vectorSearchMock.mockResolvedValue({
+      chunks: [],
+      retrievalMethod: 'text_fallback',
+    });
+    completionMock.mockResolvedValue({
+      text: 'answer',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      provider: 'mock',
+      model: 'mock-model-v1',
+    });
+
+    const service = new RAGService();
+    const result = await service.askRAGQuestion('org-1', 'user-1', 'q');
+
+    expect(completionMock.mock.calls[0][3].prompt).toContain(
+      'No direct matching document chunks found.',
+    );
+    expect(result.citations).toEqual([]);
+  });
+});
