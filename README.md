@@ -344,12 +344,12 @@ Complete production build:
 
 ## Current Verified Baseline
 
-The current main branch works against this verified baseline (updated 2026-08-10):
+The current main branch works against this verified baseline (updated 2026-08-16):
 
 - Frontend TypeScript validation
 - Backend TypeScript validation
 - 147 frontend tests across 29 test files (Vitest)
-- 413 backend tests across 59 test suites (Jest DB-free unit gate; includes the RAG evaluation harness, AI observability, cost estimation, analytics, and route-validation suites)
+- 424 backend tests across 61 test suites (Jest DB-free unit gate; includes the RAG evaluation harness, AI observability, cost estimation, analytics, route-validation, entitlement, provider, and RAG core-contract suites)
 - Deterministic RAG evaluation harness (`npm run eval:rag`) with a CI regression gate
 - AI observability: Prometheus metrics, structured logs, request correlation, retry and cost telemetry, org + platform usage analytics
 - Team invitation and tenant-isolation security integration tests (CI)
