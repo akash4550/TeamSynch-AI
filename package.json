@@ -52,7 +52,8 @@
     "@tremor/react": {
       "react": "19.2.7",
       "react-dom": "19.2.7"
-    }
+    },
+    "deepmerge-ts": "8.0.1"
   },
   "devDependencies": {
     "prettier": "^3.0.0",
