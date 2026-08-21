@@ -2,7 +2,7 @@ import { PrismaClient, TaskPriority, TaskStatus, ProjectStatus, Role, TeamRole, 
 import bcrypt from 'bcrypt';
 import { assertSeedTargetSafe } from './seed-guard';
 
-const DEMO_ORGANIZATION_ID = '00000000-0000-4000-8000-000000000001';
+const DEMO_ORGANIZATION_ID = '1';
 
 const prisma = new PrismaClient();
 
