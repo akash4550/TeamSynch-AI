@@ -34,7 +34,7 @@
    ```bash
    npm run seed -w apps/api
    ```
-   Sign in with workspace `00000000-0000-4000-8000-000000000001`, email
+   Sign in with workspace `1`, email
    `demo@teamsynch-ai.com`, and password `password123`.
 
 5. **Run the Application**
