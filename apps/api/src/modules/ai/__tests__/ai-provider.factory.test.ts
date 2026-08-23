@@ -56,6 +56,20 @@ describe('createAIProvider', () => {
     expect(provider.name).toBe('openai');
   });
 
+  it('creates the Gemini provider when fully configured', async () => {
+    process.env.AI_PROVIDER = 'GEMINI';
+    process.env.AI_MODEL = 'gemini-2.5-flash';
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+
+    const { createAIProvider } = require(
+      '../providers/ai-provider.factory'
+    );
+
+    const provider = createAIProvider();
+
+    expect(provider.name).toBe('gemini');
+  });
+
   it('rejects incomplete OpenAI configuration', async () => {
     process.env.AI_PROVIDER = 'OPENAI';
     delete process.env.AI_MODEL;

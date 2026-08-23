@@ -44,9 +44,10 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().url('FRONTEND_URL must be a valid URL').optional(),
   REDIS_URL: z.string().default('redis://localhost:6379'),
 
-  AI_PROVIDER: z.enum(['MOCK', 'OPENAI']).default('MOCK'),
+  AI_PROVIDER: z.enum(['MOCK', 'OPENAI', 'GEMINI']).default('MOCK'),
   AI_MODEL: z.string().trim().min(1).optional(),
   OPENAI_API_KEY: z.string().trim().min(1).optional(),
+  GEMINI_API_KEY: z.string().trim().min(1).optional(),
   AI_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
   AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(1000),
   // FEATURE (ledger #9): real RAG embeddings. AI_EMBEDDING_MODEL and
@@ -118,11 +119,11 @@ const envSchema = z.object({
       });
     }
 
-    if (env.AI_PROVIDER !== 'OPENAI') {
+    if (env.AI_PROVIDER !== 'OPENAI' && env.AI_PROVIDER !== 'GEMINI') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['AI_PROVIDER'],
-        message: 'AI_PROVIDER must be OPENAI in production',
+        message: 'AI_PROVIDER must be OPENAI or GEMINI in production',
       });
     }
 
@@ -134,11 +135,19 @@ const envSchema = z.object({
       });
     }
 
-    if (!env.OPENAI_API_KEY) {
+    if (env.AI_PROVIDER === 'OPENAI' && !env.OPENAI_API_KEY) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['OPENAI_API_KEY'],
-        message: 'OPENAI_API_KEY is required in production',
+        message: 'OPENAI_API_KEY is required when AI_PROVIDER=OPENAI in production',
+      });
+    }
+
+    if (env.AI_PROVIDER === 'GEMINI' && !env.GEMINI_API_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['GEMINI_API_KEY'],
+        message: 'GEMINI_API_KEY is required when AI_PROVIDER=GEMINI in production',
       });
     }
   }
