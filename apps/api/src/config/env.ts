@@ -46,8 +46,17 @@ const envSchema = z.object({
 
   AI_PROVIDER: z.enum(['MOCK', 'OPENAI', 'GEMINI']).default('MOCK'),
   AI_MODEL: z.string().trim().min(1).optional(),
-  OPENAI_API_KEY: z.string().trim().min(1).optional(),
-  GEMINI_API_KEY: z.string().trim().min(1).optional(),
+  // Docker Compose supplies an empty string for an optional unused
+  // provider key. Normalize blank values to undefined so OpenAI and Gemini
+  // deployments can coexist with strict selected-provider validation below.
+  OPENAI_API_KEY: z.preprocess(
+    (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().trim().min(1).optional(),
+  ),
+  GEMINI_API_KEY: z.preprocess(
+    (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().trim().min(1).optional(),
+  ),
   AI_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
   AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(1000),
   // FEATURE (ledger #9): real RAG embeddings. AI_EMBEDDING_MODEL and
