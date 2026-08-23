@@ -204,8 +204,8 @@ Application flow:
 
    Demo sign-in:
    - Workspace ID: `d71e334f-0356-4d3b-90d0-b9cc873ffc93` (Organization: akash4550)
-   - Admin Email: `demo@teamsynch-ai.com`
-   - Password: `password123`
+   - Admin Email: `akshaylakwal@gmail.com`
+   - Password: `Akshay@12345678`
 
 9. Start the development servers:
 
