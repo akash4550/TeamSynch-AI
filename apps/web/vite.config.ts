@@ -12,21 +12,22 @@ export default defineConfig(() => {
         '@': path.resolve(import.meta.dirname, './src'),
       },
     },
-    server: {
-      host: '127.0.0.1',
-      port: 5173,
-      proxy: {
-        '/api': {
-          target: developmentApiTarget,
-          changeOrigin: true,
-        },
-        '/socket.io': {
-          target: developmentApiTarget,
-          changeOrigin: true,
-          ws: true,
-        },
-      },
+server: {
+  host: 'localhost',
+  port: 5173,
+  strictPort: true,
+  proxy: {
+    '/api': {
+      target: developmentApiTarget,
+      changeOrigin: false,
     },
+    '/socket.io': {
+      target: developmentApiTarget,
+      changeOrigin: false,
+      ws: true,
+    },
+  },
+},
     build: {
       target: 'es2022',
       cssCodeSplit: true,

@@ -204,8 +204,8 @@ Application flow:
 
    Demo sign-in:
    - Workspace ID: `d71e334f-0356-4d3b-90d0-b9cc873ffc93` (Organization: akash4550)
-   - Admin Email: `akshaylakwal@gmail.com`
-   - Password: `Akshay@12345678`
+   - Admin Email: `demo@teamsynch-ai.com`
+   - Password: `password123`
 
 9. Start the development servers:
 
@@ -316,6 +316,37 @@ floors — useful in CI to catch dataset or retriever regressions. The
 floors are relative to this synthetic baseline, not a claim about
 production retrieval quality.
 
+## Gemini AI Provider
+
+TeamSynch AI supports provider-based AI integrations for workspace assistance
+and retrieval-augmented generation.
+
+The default local `MOCK` provider supports UI and API development without an
+external cost, but intentionally does not create embeddings. Real semantic RAG
+requires a provider that supports both chat generation and embeddings.
+
+Gemini is supported as a native provider. Create an API key in Google AI Studio
+and configure `apps/api/.env` locally:
+
+```env
+AI_PROVIDER=GEMINI
+GEMINI_API_KEY=your_google_ai_studio_key
+AI_MODEL=gemini-3.6-flash
+AI_EMBEDDING_MODEL=gemini-embedding-2
+AI_EMBEDDING_DIMS=1536
+```
+
+The 1536 embedding dimension matches the PostgreSQL pgvector schema. Restart
+the API after changing provider configuration. Never commit `.env` files or
+provider API keys.
+
+RAG flow:
+
+```text
+Document upload → BullMQ ingestion → text extraction → chunking →
+Gemini embeddings → pgvector storage → tenant-scoped retrieval →
+grounded assistant response with citations
+```
 ### Measuring the real retrieval path (optional)
 
 The harness ships a read-only adapter over the existing

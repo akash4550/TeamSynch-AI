@@ -57,6 +57,22 @@ describe('envSchema production secrets gate (BUG FIX #106)', () => {
     }
   });
 
+  it('accepts Gemini production config when Compose passes an empty unused OpenAI key', () => {
+    const result = envSchema.safeParse({
+      ...fullyConfiguredProduction(),
+      AI_PROVIDER: 'GEMINI',
+      AI_MODEL: 'gemini-3.6-flash',
+      OPENAI_API_KEY: '',
+      GEMINI_API_KEY: 'gemini-live-example',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.OPENAI_API_KEY).toBeUndefined();
+      expect(result.data.GEMINI_API_KEY).toBe('gemini-live-example');
+    }
+  });
+
   it('keeps ENCRYPTION_SECRET_KEY optional outside production (dev fallback documented)', () => {
     const result = envSchema.safeParse({ NODE_ENV: 'development' });
 
