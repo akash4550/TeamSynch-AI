@@ -44,7 +44,7 @@
     "backup:cleanup": "node scripts/backup-recovery.mjs cleanup"
   },
   "overrides": {
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.7",
     "@apidevtools/json-schema-ref-parser": {
       "js-yaml": "4.3.1"
     },
